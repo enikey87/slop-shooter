@@ -4,7 +4,7 @@
 
 ![Скриншот](docs/screenshot.png)
 
-- **Играть:** https://claude.ai/artifact/9HgNhLMHPAPvWYUPTZ2Npm
+- **Играть:** https://enikey87.github.io/slop-shooter/
 - **Дизайн-документ:** https://claude.ai/code/artifact/7178ddbb-80f7-4103-9e61-72e0da9764b3
 
 ## Запуск
