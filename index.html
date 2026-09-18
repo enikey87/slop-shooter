@@ -84,7 +84,7 @@
       <dt>Q · E · R</dt><dd>выключить Wi-Fi · потрогать траву · блэкаут</dd>
       <dt>C · V · G</dt><dd>позвать дядю Васю · Ctrl+Z · промпт-инъекция</dd>
       <dt>F</dt><dd>поздравить деда</dd>
-      <dt>P · M</dt><dd>пауза · звук</dd>
+      <dt>P · M · N</dt><dd>пауза · звук · сменить трек</dd>
     </dl>
     <dl class="keys" id="keys-touch" hidden>
       <dt>Левый палец</dt><dd>ходить</dd>
@@ -113,6 +113,19 @@
     <p class="post" id="over-post"></p>
     <p class="stats" id="over-stats"></p>
     <div class="row"><button id="btn-restart" type="button">Сгенерировать заново?</button></div>
+  </div>
+</div>
+
+<div class="screen" id="win" hidden>
+  <div class="card">
+    <span class="label">ФИНАЛЬНЫЙ БОСС ПОВЕРЖЕН</span>
+    <h1>ГЕННАДИЙ ПОБЕДИЛ СЕБЯ</h1>
+    <p class="post">Скуф повержен. Диван свободен. Но слоп бесконечен, а тебе всё ещё 44.</p>
+    <p class="stats" id="win-stats"></p>
+    <div class="row">
+      <button id="btn-continue" type="button">Бесконечный режим</button>
+      <button class="ghost" id="btn-win-restart" type="button">Сгенерировать заново</button>
+    </div>
   </div>
 </div>
 
@@ -170,7 +183,9 @@
     coffee: '#6b3f22', coffeeL: '#c8955f', suit: '#e8ecf0', suitD: '#aab2bd', horse: '#8b5a3c', horseD: '#5e3a26', cardigan: '#7a5c3a',
     banana: '#f5d742', bananaD: '#c9a92a', monkey: '#7a5230', cactus: '#4f9a4a', cactusD: '#356b33', capy: '#a0714a', capyD: '#734f31',
     orange: '#ff9a2e', floppa: '#d9b58a', floppaD: '#a8845c', doge: '#e8a94c', dogeD: '#b87a2e', dogeL: '#fbe3b8', toilet: '#eef2f5',
-    toiletD: '#b9c3cc', sus: '#d8323a', susD: '#8e1f26', visor: '#9fe3ff', troll: '#f4f4f4', track: '#3553a8', trackD: '#233a7a'
+    toiletD: '#b9c3cc', sus: '#d8323a', susD: '#8e1f26', visor: '#9fe3ff', troll: '#f4f4f4', track: '#3553a8', trackD: '#233a7a',
+    oiiaW: '#f2efe9', hairBlk: '#221c28', turtle: '#2a2433', turtleL: '#3d3548', tank: '#f0ede4', stain: '#c9b77a', bottle: '#3d7a3a',
+    lab: '#d9b999', labD: '#a8835f', labF: '#f3dcc6', labP: '#f2a1b8', choc: '#5a3520', chocL: '#7a4b2e', pist: '#9cc95a', couch: '#8e3b2f', couchD: '#5e2720'
   };
 
   // ======================= sound =======================
@@ -248,6 +263,15 @@
       skibidi() { arp([392, 392, 523, 466], .09, 'square', .05, .08); },
       sus() { tone(120, 60, .5, 'sawtooth', .14); tone(180, 90, .5, 'square', .06); },
       wow() { tone(500, 800, .08, 'square', .05); tone(800, 500, .1, 'square', .05, .08); },
+      oiia() { tone(380, 950, .12, 'square', .07); tone(950, 420, .16, 'square', .07, .12); },
+      sigma() { arp([147, 175, 220, 175], .12, 'sawtooth', .05, .14); },
+      woof() { tone(320, 180, .12, 'sawtooth', .1); noise(.08, .1, 900); },
+      meow() { tone(700, 1100, .1, 'triangle', .08); tone(1100, 600, .14, 'triangle', .08, .1); },
+      skuf() { noise(.2, .15, 300); tone(110, 90, .3, 'sawtooth', .1); },
+      unbox() { noise(.25, .15, 3000, 'highpass', 0, 800); arp([523, 659], .1, 'triangle', .08, .1); },
+      secret() { arp([523, 659, 784, 1046, 1319, 1568], .06, 'square', .08, .1); },
+      sugar() { arp([392, 523, 659, 784, 1046], .04, 'square', .07, .08); },
+      bottle() { tone(2400, 2200, .06, 'triangle', .08); noise(.15, .15, 3000, 'highpass', .03); },
       sixseven() { tone(330, 330, .12, 'square', .07); tone(440, 440, .16, 'square', .07, .16); },
       peel() { tone(900, 200, .3, 'sine', .12); },
       whistle() { tone(1500, 500, .85, 'sine', .04); },
@@ -271,57 +295,132 @@
       if (last[name] && now - last[name] < gap) return;
       last[name] = now; SFX[name]();
     }
-    // ---- chiptune: bass + arp + lead + drums, sections A/B/C ----
+    // ---- music: several tracks, each is a step function over 16th notes ----
     const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
-    const SONGS = {
+    const M = {
+      n: (m, d, type, vol, t) => tone(mtof(m), mtof(m), d, type, vol, t, musicBus),
+      kick: (t, v = .9) => { tone(160, 45, .14, 'sine', v, t, musicBus); tone(900, 300, .012, 'square', .12 * v, t, musicBus); },
+      snare: (t, v = .45) => { noise(.12, v, 1800, 'bandpass', t, null, musicBus); tone(220, 160, .06, 'triangle', .22, t, musicBus); },
+      clap: (t, v = .3) => { for (let i = 0; i < 3; i++) noise(.05, v, 1500, 'bandpass', t + i * .012, null, musicBus); },
+      hat: (t, v = .08) => noise(.03, v, 8000, 'highpass', t, null, musicBus),
+      ohat: (t, v = .1) => noise(.14, v, 7000, 'highpass', t, null, musicBus),
+      cow: (m, t, d = .12) => { const f = mtof(m); tone(f, f, d, 'square', .07, t, musicBus); tone(f * 1.48, f * 1.48, d, 'square', .05, t, musicBus); },
+      b808: (m, t, d = .5) => { const f = mtof(m); tone(f * 1.6, f, d, 'sine', .85, t, musicBus); tone(f, f * .98, d, 'triangle', .3, t, musicBus); },
+      pad: (ms, d, t, v = .025) => { for (const m of ms) { const f = mtof(m); tone(f, f, d, 'sawtooth', v, t, musicBus); tone(f * 1.007, f * 1.007, d, 'sawtooth', v, t, musicBus); } }
+    };
+    function lead(L, bar, s, t, spb, type, vol, shift = 0) {
+      const n = L[bar * 16 + s];
+      if (!n) return;
+      let dur = 1; while (dur < 4 && s + dur < 16 && L[bar * 16 + s + dur] === 0) dur++;
+      M.n(n + shift, spb * dur * .95, type, vol, t);
+    }
+    const CH = {
       main: {
-        bpm: 126, chords: [[45, 0], [41, 1], [48, 1], [43, 1]], order: ['A', 'B', 'B', 'C'],
-        lead: [
-          76, 0, 0, 74, 76, 0, 79, 0, 76, 0, 74, 0, 72, 0, 0, 0,
-          72, 0, 0, 74, 72, 0, 69, 0, 72, 0, 74, 0, 77, 0, 0, 0,
-          79, 0, 0, 77, 76, 0, 74, 0, 76, 0, 79, 0, 84, 0, 0, 0,
-          83, 0, 81, 0, 79, 0, 77, 0, 76, 0, 74, 0, 71, 0, 74, 0
-        ]
+        chords: [[45, 0], [41, 1], [48, 1], [43, 1]], order: ['A', 'B', 'B', 'C'],
+        lead: [76, 0, 0, 74, 76, 0, 79, 0, 76, 0, 74, 0, 72, 0, 0, 0, 72, 0, 0, 74, 72, 0, 69, 0, 72, 0, 74, 0, 77, 0, 0, 0,
+          79, 0, 0, 77, 76, 0, 74, 0, 76, 0, 79, 0, 84, 0, 0, 0, 83, 0, 81, 0, 79, 0, 77, 0, 76, 0, 74, 0, 71, 0, 74, 0]
       },
       boss: {
-        bpm: 148, chords: [[40, 0], [36, 1], [38, 1], [35, 1]], order: ['B', 'B', 'C', 'B'],
-        lead: [
-          76, 0, 76, 0, 79, 0, 76, 0, 83, 0, 81, 0, 79, 0, 76, 0,
-          72, 0, 72, 0, 76, 0, 72, 0, 79, 0, 77, 0, 76, 0, 72, 0,
-          74, 0, 74, 0, 78, 0, 74, 0, 81, 0, 79, 0, 78, 0, 74, 0,
-          75, 0, 78, 0, 81, 0, 83, 0, 87, 0, 83, 0, 81, 0, 78, 0
-        ]
+        hard: true, chords: [[40, 0], [36, 1], [38, 1], [35, 1]], order: ['B', 'B', 'C', 'B'],
+        lead: [76, 0, 76, 0, 79, 0, 76, 0, 83, 0, 81, 0, 79, 0, 76, 0, 72, 0, 72, 0, 76, 0, 72, 0, 79, 0, 77, 0, 76, 0, 72, 0,
+          74, 0, 74, 0, 78, 0, 74, 0, 81, 0, 79, 0, 78, 0, 74, 0, 75, 0, 78, 0, 81, 0, 83, 0, 87, 0, 83, 0, 81, 0, 78, 0]
       }
     };
-    const mt = (m, dur, type, vol, t) => tone(mtof(m), mtof(m), dur, type, vol, t, musicBus);
+    function chip(S, step, t, spb) {
+      const bar = (step >> 4) % 4, s = step % 16, sec = S.order[(step >> 6) % S.order.length];
+      const [root, maj] = S.chords[bar], ch = [root, root + (maj ? 4 : 3), root + 7, root + 12];
+      if (s % 2 === 0) { const n = root + (s === 6 || s === 14 ? 12 : 0); M.n(n, spb * 1.7, 'square', .1, t); M.n(n, spb * 1.8, 'triangle', .3, t); }
+      if (sec !== 'A' || s % 2 === 0) M.n(ch[s % 4] + 24, spb * .7, 'square', sec === 'A' ? .05 : .03, t);
+      if (sec !== 'A') { lead(S.lead, bar, s, t, spb, 'square', .085, sec === 'C' ? -12 : 0); lead(S.lead, bar, s, t, spb, 'sawtooth', .025, sec === 'C' ? -12 : 0); }
+      if (s % 4 === 0 || (S.hard && s === 10)) M.kick(t);
+      if (s === 4 || s === 12) M.snare(t);
+      if (sec === 'C' || S.hard || s % 2 === 0) M.hat(t, s % 4 === 2 ? .14 : .07);
+    }
+    function phonk(fast, step, t, spb) {
+      const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6) % 4, r = [37, 37, 33, 35][bar];
+      const pat = bar % 2 ? [73, 0, 76, 0, 78, 0, 76, 0, 73, 0, 71, 0, 68, 0, 71, 0] : [73, 0, 73, 0, 76, 0, 73, 0, 71, 0, 68, 0, 71, 0, 73, 0];
+      if ((sec > 0 || fast) && pat[s]) M.cow(pat[s] + (bar === 2 ? -4 : 0), t);
+      if ([0, 3, 8, 11].includes(s)) M.b808(r, t, spb * 3.5);
+      if (s === 0 || s === 10 || (fast && s === 6)) M.kick(t, 1);
+      if (s === 8) { M.clap(t); M.snare(t, .3); }
+      M.hat(t, s % 2 ? .05 : .09);
+      if ((sec === 3 || fast) && s >= 14) { M.hat(t + spb / 3, .06); M.hat(t + spb * 2 / 3, .06); }
+    }
+    const DISCO_L = [77, 0, 0, 76, 77, 0, 81, 0, 0, 0, 79, 0, 77, 0, 76, 0, 76, 0, 0, 74, 76, 0, 79, 0, 0, 0, 77, 0, 76, 0, 74, 0,
+      74, 0, 0, 72, 74, 0, 77, 0, 0, 0, 76, 0, 74, 0, 72, 0, 72, 0, 74, 0, 76, 0, 77, 0, 79, 0, 81, 0, 84, 0, 0, 0];
+    const SIGMA_L = [74, 0, 0, 0, 72, 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 70, 0, 0, 0, 69, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      72, 0, 0, 0, 74, 0, 76, 0, 0, 0, 77, 0, 0, 0, 0, 0, 76, 0, 0, 0, 73, 0, 0, 0, 69, 0, 0, 0, 0, 0, 0, 0];
+    const SONGS = {
+      main: { name: 'СЛОП-ЧИПТЮН', bpm: 126, play: (st, t, spb) => chip(CH.main, st, t, spb) },
+      disco: {
+        name: 'ИТАЛО-БРЕЙНРОТ ДИСКО', bpm: 122, play(step, t, spb) {
+          const bar = (step >> 4) % 4, s = step % 16, sec = (step >> 6) % 4;
+          const r = [41, 40, 38, 36][bar], q = [[0, 4, 7, 11], [0, 3, 7, 10], [0, 3, 7, 10], [0, 4, 7, 11]][bar].map(x => x + r);
+          if (s % 2 === 0) { const n = r + (s % 4 === 2 ? 12 : 0); M.n(n, spb * 1.6, 'square', .1, t); M.n(n, spb * 1.6, 'triangle', .28, t); }
+          M.n(q[s % 4] + 24, spb * .6, 'square', sec ? .03 : .05, t);
+          if (sec > 0) { lead(DISCO_L, bar, s, t, spb, 'square', .075); lead(DISCO_L, bar, s, t, spb, 'triangle', .06, 12); }
+          if (s % 4 === 0) M.kick(t);
+          if (s % 4 === 2) M.ohat(t);
+          if (s === 4 || s === 12) M.clap(t);
+          if (sec === 3) M.hat(t, .05);
+        }
+      },
+      phonk: { name: 'ДРИФТ-ФОНК 67', bpm: 128, play: (st, t, spb) => phonk(false, st, t, spb) },
+      sigma: {
+        name: 'СИГМА-ГРИНДСЕТ', bpm: 100, play(step, t, spb) {
+          const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6) % 4;
+          const r = [50, 46, 48, 45][bar], ch = [[0, 3, 7], [0, 4, 7], [0, 4, 7], [0, 4, 7]][bar].map(x => x + r);
+          if (s === 0) M.pad(ch.map(x => x + 12), spb * 16, t, .02);
+          if (s === 0 || s === 6 || s === 10) { M.n(r - 12, spb * 3, 'triangle', .38, t); M.n(r - 12, spb * 3, 'square', .05, t); }
+          if (s % 2 === 0) M.n(ch[[0, 1, 2, 1, 2, 0, 1, 2][(s / 2) % 8]] + 24, spb * 1.5, 'triangle', .07, t);
+          if (sec >= 2) lead(SIGMA_L, bar, s, t, spb, 'sine', .08, 12);
+          if (s === 0 || s === 10) M.kick(t, .8);
+          if (s === 8) M.snare(t, .3);
+          if (s % 2 === 0) M.hat(t, .04);
+        }
+      },
+      hardbass: {
+        name: 'ХАРДБАСС ДЛЯ СКУФА', bpm: 142, play(step, t, spb) {
+          const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6) % 4, r = [45, 45, 43, 41][bar];
+          if (s % 4 === 0) M.kick(t, 1);
+          if (s % 4 === 2) { M.n(r, spb * 1.5, 'sawtooth', .12, t); M.n(r + 12, spb * 1.5, 'square', .05, t); M.ohat(t, .08); }
+          if (sec > 0 && [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0][s]) { M.n(r + 24, spb * .8, 'sawtooth', .05, t); M.n(r + 31, spb * .8, 'sawtooth', .04, t); M.n(r + 36, spb * .8, 'square', .03, t); }
+          if (s === 4 || s === 12) M.clap(t);
+          if (sec === 3) M.hat(t, .05);
+        }
+      },
+      boss: { name: 'БОСС: ЧИПТЮН', bpm: 148, play: (st, t, spb) => chip(CH.boss, st, t, spb) },
+      bossMetal: {
+        name: 'БОСС: МЕТАЛ', bpm: 170, play(step, t, spb) {
+          const s = step % 16, bar = (step >> 4) % 4, r = [40, 40, 43, 38][bar];
+          if ([1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1][s]) { M.n(r, spb * .9, 'sawtooth', .1, t); M.n(r + 7, spb * .9, 'sawtooth', .07, t); M.n(r - 12, spb * .9, 'square', .08, t); }
+          M.kick(t, s % 2 ? .55 : .9);
+          if (s === 4 || s === 12) M.snare(t, .5);
+          if (s % 2 === 0) M.hat(t, .06);
+          const L = [76, 0, 79, 0, 83, 0, 82, 0, 79, 0, 76, 0, 74, 0, 76, 0][s];
+          if ((step >> 6) % 2 && L) M.n(L + 12, spb * 1.8, 'square', .06, t);
+        }
+      },
+      bossPhonk: { name: 'БОСС: ФОНК', bpm: 150, play: (st, t, spb) => phonk(true, st, t, spb) }
+    };
+    const REG = ['main', 'disco', 'phonk', 'sigma', 'hardbass'], BOSS_TR = ['boss', 'bossMetal', 'bossPhonk'];
+    let regIdx = 0, bossIdx = 0, inBoss = false, trackCb = null;
+    function setSong(n) { if (n === song) return; song = n; step = 0; if (trackCb) trackCb(SONGS[n].name); }
     function schedule() {
       if (!ac) return;
       if (!playing || !enabled) { nextT = ac.currentTime + .05; return; }
       const S = SONGS[song], spb = 60 / S.bpm / 4;
       if (nextT < ac.currentTime) nextT = ac.currentTime + .02;
-      while (nextT < ac.currentTime + .15) {
-        const bar = (step >> 4) % 4, s = step % 16, sec = S.order[(step >> 6) % S.order.length], t = nextT - ac.currentTime;
-        const [root, maj] = S.chords[bar], ch = [root, root + (maj ? 4 : 3), root + 7, root + 12];
-        if (s % 2 === 0) { const n = root + (s === 6 || s === 14 ? 12 : 0); mt(n, spb * 1.7, 'square', .1, t); mt(n, spb * 1.8, 'triangle', .3, t); }
-        if (sec !== 'A' || s % 2 === 0) mt(ch[s % 4] + 24, spb * .7, 'square', sec === 'A' ? .05 : .03, t);
-        if (sec !== 'A') {
-          const L = S.lead[bar * 16 + s];
-          if (L > 0) {
-            let dur = 1; while (dur < 4 && s + dur < 16 && S.lead[bar * 16 + s + dur] === 0) dur++;
-            const n = L - (sec === 'C' ? 12 : 0);
-            mt(n, spb * dur * .95, 'square', .085, t); tone(mtof(n) * 1.006, mtof(n) * 1.006, spb * dur * .95, 'sawtooth', .03, t, musicBus);
-          }
-        }
-        if (s % 4 === 0 || (song === 'boss' && s === 10)) { tone(160, 45, .14, 'sine', .9, t, musicBus); tone(900, 300, .012, 'square', .12, t, musicBus); }
-        if (s === 4 || s === 12) { noise(.12, .45, 1800, 'bandpass', t, null, musicBus); tone(220, 160, .06, 'triangle', .22, t, musicBus); }
-        if (sec === 'C' || song === 'boss' || s % 2 === 0) noise(.03, s % 4 === 2 ? .14 : .07, 8000, 'highpass', t, null, musicBus);
-        nextT += spb; step++;
-      }
+      while (nextT < ac.currentTime + .15) { S.play(step, nextT - ac.currentTime, spb); nextT += spb; step++; }
     }
     return {
       init, play,
       music(on) { playing = on; if (on && ac) { if (ac.state === 'suspended') ac.resume(); nextT = ac.currentTime + .05; } },
-      bossMode(b) { const ns = b ? 'boss' : 'main'; if (ns !== song) { song = ns; step = 0; } },
+      bossMode(b, idx = 0, name) { inBoss = b; if (b) bossIdx = idx; setSong(b ? (name || BOSS_TR[bossIdx % BOSS_TR.length]) : REG[regIdx % REG.length]); },
+      regular(i) { regIdx = i; if (!inBoss) setSong(REG[i % REG.length]); },
+      next() { if (inBoss) setSong(BOSS_TR[++bossIdx % BOSS_TR.length]); else setSong(REG[++regIdx % REG.length]); },
+      set onTrack(fn) { trackCb = fn; },
+      get track() { return SONGS[song].name; },
       toggle() { enabled = !enabled; if (master) master.gain.value = enabled ? .9 : 0; return enabled; },
       get on() { return enabled; },
       get debug() { return { state: ac && ac.state, playing, song, step }; }
@@ -825,6 +924,96 @@
     g.ell(9, 6, 3.5, 4, P.skin); g.rect(5, 2, 8, 2, P.hair); g.px(5, 4, P.hair);
     g.px(10, 5, P.ink); g.px(12, 5, P.ink); g.rect(10, 8, 2, 1 + up, P.ink);
   }
+  // OIIA-кот: крутится на 360°, кадр = угол поворота
+  function sOiia(g, f) {
+    const a = f / 8 * TAU, fc = Math.cos(a), sd = Math.sin(a);
+    if (fc < .5) { const tx = 8 - sd * 5; g.line(8, 16, tx, 11, P.greyD, 2); g.px(tx, 10, P.greyD); }
+    const bw = 4 + Math.abs(fc) * 1.5;
+    g.ell(8, 15, bw, 4, P.grey); if (fc > 0) g.ell(8 + sd * 1.5, 16, bw * .6, 2.5, P.oiiaW);
+    if (fc > -.3) { g.rect(R(6 + sd * 2), 18, 2, 1, P.oiiaW); g.rect(R(9 + sd * 2), 18, 2, 1, P.oiiaW); }
+    const hx = 8 + sd * 1.5, ew = 3.5 * Math.max(.35, Math.abs(fc));
+    g.ell(hx, 7, 5, 4.5, P.grey);
+    g.line(hx - ew, 4, hx - ew - .5, 1, P.grey, 2); g.line(hx + ew, 4, hx + ew + .5, 1, P.grey, 2);
+    if (fc > 0) { g.px(hx - ew, 2, P.pinkD); g.px(hx + ew, 2, P.pinkD); }
+    if (fc > -.2) {
+      g.ell(hx + sd * 2, 8, 3.5 * Math.max(.4, fc), 3, P.oiiaW);
+      const es = 2.2 * Math.max(.3, fc), ex = hx + sd * 2.5;
+      for (const k of [-1, 1]) { if (fc < .3 && k === -Math.sign(sd)) continue; g.rect(R(ex + k * es - 1), 5, 2, 2, P.white); g.px(R(ex + k * es), 6, P.ink); }
+      const mx = hx + sd * 3;
+      if (f % 2 === 0) { g.ell(mx, 9.5, 1.6, 1.8, P.ink); g.px(mx, 10, P.pinkD); }
+      else { g.rect(R(mx - 2), 9, 4, 2, P.ink); g.px(R(mx - 1), 9, P.white); }
+    } else g.ell(hx, 7, 3, 2.5, P.greyD);
+  }
+  // Сигма-бой: челюсть больше головы
+  function sSigma(g, f) {
+    const sw = [1, 0, -1, 0][f];
+    g.line(6, 19, 6 + sw, 23, P.hairBlk, 2); g.line(10, 19, 10 - sw, 23, P.hairBlk, 2);
+    g.rect(5 + sw, 24, 3, 1, P.white); g.rect(9 - sw, 24, 3, 1, P.white);
+    g.rect(4, 11, 9, 9, P.turtle); g.rect(4, 11, 2, 9, P.hairBlk); g.rect(4, 14, 9, 2, P.turtleL); g.px(5, 14, P.skin); g.px(12, 15, P.skin);
+    g.rect(6, 9, 5, 2, P.turtle);
+    g.rect(5, 2, 7, 5, P.skin); g.rect(3, 5, 11, 4, P.skin); g.rect(3, 8, 11, 1, P.skinD); g.px(9, 8, P.skinD); g.rect(3, 5, 1, 3, P.skinD);
+    g.rect(5, 0, 7, 3, P.hairBlk); g.line(7, 3, 12, 4, P.hairBlk); g.px(12, 4, P.hairBlk);
+    g.px(9, 5, P.ink); g.px(11, 5, P.ink); g.rect(10, 4, 2, 1, P.hairBlk);
+    g.rect(10, 7, 3, 1, P.skinD);
+    if (f === 0) g.px(13, 6, P.white);
+  }
+  // квадробер: человек в маске на четвереньках
+  function sQuadro(g, f, v) {
+    const sw = [2, 0, -2, 0][f], bob = f % 2;
+    const hood = ['#6b5bd6', '#3d8f6b', '#c24f7a'][v], hoodD = ['#4a3da0', '#2a6a4d', '#8e345a'][v];
+    g.line(5, 9 + bob, 3 - sw, 13, P.jeansD, 2); g.rect(2 - sw, 13, 3, 1, P.white);
+    g.line(8, 9 + bob, 7 + sw, 13, P.jeans, 2); g.rect(6 + sw, 13, 3, 1, P.white);
+    g.line(3, 7 + bob, 0, 4 + bob + (f % 2), [P.white, P.brown, P.orange][v]);
+    g.rect(4, 6 + bob, 11, 4, hood); g.rect(4, 9 + bob, 11, 1, hoodD);
+    g.line(13, 9 + bob, 14 + sw, 13, hoodD, 2); g.rect(13 + sw, 13, 3, 1, P.skin);
+    g.line(15, 9 + bob, 16 - sw, 13, hood, 2); g.rect(15 - sw, 13, 3, 1, P.skin);
+    g.ell(17, 5 + bob, 3.5, 3.5, P.hair);
+    const mc = [P.white, P.brownL, P.orange][v], mcD = [P.greyL, P.brown, P.vestD][v];
+    g.ell(18, 5 + bob, 3, 3, mc); g.rect(19, 6 + bob, 3, 2, mc);
+    if (v === 1) g.rect(15, 3 + bob, 2, 4, mcD);
+    else { g.line(16, 3 + bob, 15, bob, mc, 2); g.line(19, 2 + bob, 20, bob, mc, 2); g.px(15, 1 + bob, P.pink); }
+    g.px(18, 4 + bob, P.ink); g.px(20, 4 + bob, P.ink); g.px(21, 7 + bob, P.ink); g.px(18, 5 + bob, P.cyan);
+  }
+  // скуф: Геннадий через 10 лет (жилет тот же)
+  function sSkuf(g, f) {
+    const sw = [1, 0, -1, 0][f], b = f % 2;
+    g.rect(7 + sw, 21, 3, 6, P.trackD); g.rect(12 - sw, 21, 3, 6, P.track); g.rect(9 + sw, 21, 1, 6, P.white); g.rect(14 - sw, 21, 1, 6, P.white);
+    g.rect(6 + sw, 27, 4, 1, P.white); g.rect(12 - sw, 27, 4, 1, P.white); g.rect(5 + sw, 28, 5, 1, P.metal); g.rect(11 - sw, 28, 5, 1, P.metal);
+    g.line(6, 12, 5, 19, P.skinD, 2);
+    g.ell(12, 16 + b, 8, 6, P.tank); g.ell(15, 17 + b, 5, 4, P.tank);
+    g.ell(14, 14 + b, 1.5, 1, P.stain); g.px(10, 17 + b, P.stain);
+    g.rect(7, 20 + b, 12, 2, P.skin); g.px(14, 20 + b, P.skinD); g.px(12, 21 + b, P.hair); g.px(16, 21 + b, P.hair);
+    g.rect(5, 11, 3, 10, P.vest); g.rect(6, 11, 1, 10, P.stripe); g.rect(17, 11, 2, 6, P.vest); g.px(17, 13, P.stripe);
+    g.line(17, 12, 20, 15, P.skin, 2); g.rect(20, 9, 2, 6, P.bottle); g.px(20, 8, P.bottle); g.px(20, 7, P.gold); g.px(21, 11, P.paper);
+    g.ell(11, 6, 4.5, 4.5, P.skin); g.px(10, 3, P.white); g.px(11, 3, P.skinL);
+    g.line(8, 4, 13, 3, P.hair); g.line(8, 5, 13, 4, P.hair); g.rect(6, 5, 2, 3, P.hair);
+    g.px(13, 6, P.ink); g.px(13, 7, P.skinD); g.rect(12, 8, 4, 1, P.hair); g.rect(8, 10, 7, 1, P.skinD); g.px(15, 7, P.red);
+    g.px(10, 11, P.gold); g.px(12, 12, P.gold); g.px(14, 11, P.gold);
+  }
+  // лабубу: улыбка шире головы
+  function sLabubu(g, f) {
+    const dy = f === 1 ? 1 : f === 2 ? -1 : 0, ly = f === 2 ? -1 : 0;
+    g.rect(4, 13 + ly, 2, 2, P.labD); g.rect(8, 13 + ly, 2, 2, P.labD);
+    g.ell(7, 10 + dy, 4.5, 4, P.lab); g.px(3, 11 + dy, P.labF); g.px(11, 9 + dy, P.labF);
+    g.rect(3, dy, 2, 5, P.lab); g.rect(9, dy, 2, 5, P.lab); g.px(4, 1 + dy, P.labP); g.px(9, 1 + dy, P.labP);
+    g.ell(7, 6 + dy, 5, 4, P.lab); g.ell(7, 7 + dy, 3.5, 2.5, P.labF);
+    g.rect(4, 5 + dy, 2, 2, P.ink); g.rect(8, 5 + dy, 2, 2, P.ink); g.px(4, 5 + dy, P.white); g.px(8, 5 + dy, P.white);
+    const open = f === 3;
+    g.rect(2, 8 + dy, 10, open ? 3 : 1, P.ink);
+    for (let x = 2; x < 12; x += 2) { g.px(x, 8 + dy, P.white); if (open) g.px(x + 1, 10 + dy, P.white); }
+  }
+  function sBlindbox(g, f) { g.rect(1, 2, 11, 10, P.labP); g.rect(1, 2, 11, 2, P.pinkL); g.rect(6, 2, 1, 10, P.white); sign(g, '?', 3, 5, P.white); sign(g, '?', 8, 5, P.white); if (f) g.px(11, 1, P.gold); }
+  function sDubai(g, f) {
+    g.rect(1, 2, 11, 5, P.choc); g.rect(1, 2, 11, 1, P.chocL); g.px(4, 4, P.chocL); g.px(7, 4, P.chocL);
+    g.rect(9, 3, 3, 3, P.pist); g.px(10, 4, P.gold); g.px(11, 3, P.gold); g.px(9, 5, P.greenD);
+    if (f) { g.px(2, 1, P.white); g.px(12, 7, P.gold); }
+  }
+  function sCouch(g) {
+    g.rect(2, 2, 18, 7, P.couch); g.rect(2, 2, 18, 1, '#b04a3b'); g.rect(10, 3, 1, 5, P.couchD);
+    g.rect(1, 9, 20, 5, P.couchD); g.rect(1, 9, 20, 1, P.couch); g.rect(0, 6, 3, 9, P.couch); g.rect(19, 6, 3, 9, P.couch);
+    g.px(1, 15, P.ink); g.px(20, 15, P.ink); g.px(6, 11, P.stain); g.px(14, 12, P.stain);
+  }
+  function sBottle(g) { g.rect(1, 2, 3, 5, P.bottle); g.px(2, 1, P.bottle); g.px(2, 0, P.gold); g.px(2, 4, P.paper); }
   function sKb(g) { g.rect(1, 1, 9, 4, P.greyD); for (let x = 2; x < 9; x += 2) { g.px(x, 2, P.greyL); g.px(x + 1, 3, P.greyL); } }
   function sSlipper(g) { g.rect(1, 2, 7, 2, P.pinkD); g.rect(2, 1, 5, 1, P.pink); g.px(7, 1, P.pink); g.rect(3, 1, 2, 1, P.cyan); }
   function sNyan(g, f) { g.rect(3, 1, 7, 5, P.floppa); g.rect(4, 2, 5, 3, P.pinkL); g.px(5, 3, P.pinkD); g.rect(9, 2, 3, 3, P.grey); g.px(10, 3, P.ink); g.px(4 + f, 6, P.grey); g.px(8 - f, 6, P.grey); }
@@ -882,6 +1071,15 @@
     SPR.peel = sheet(9, 6, 1, sPeel, 4, 5);
     SPR.sixseven = sheet(18, 24, 4, sSixSeven, 9, 22);
     SPR.digits = { '6': sheet(5, 7, 1, g => sign(g, '6', 1, 1, P.green), 2, 3), '7': sheet(5, 7, 1, g => sign(g, '7', 1, 1, P.green), 2, 3) };
+    SPR.oiia = sheet(17, 21, 8, sOiia, 8, 19);
+    SPR.sigma = sheet(17, 27, 4, sSigma, 8, 25);
+    SPR.quadro = [0, 1, 2].map(v => sheet(23, 16, 4, (g, f) => sQuadro(g, f, v), 11, 14));
+    SPR.skuf = sheet(24, 30, 4, sSkuf, 11, 28);
+    SPR.labubu = sheet(14, 17, 4, sLabubu, 7, 15);
+    SPR.blindbox = sheet(13, 13, 2, sBlindbox, 6, 12);
+    SPR.dubai = sheet(14, 9, 2, sDubai, 7, 8);
+    SPR.couch = sheet(22, 17, 1, sCouch, 0, 0);
+    SPR.bottle = sheet(5, 8, 1, sBottle, 2, 4);
     SPR.words = {};
     for (const w of ['WOW', 'SUCH', 'MUCH', 'VERY', 'AMAZE']) SPR.words[w] = sheet(w.length * 4 + 1, 7, 1, sWord(w), (w.length * 4 + 1) >> 1, 3);
     SPR.letters = {};
@@ -899,7 +1097,8 @@
   const PROPDEF = {
     cab: { w: 16, h: 8, hp: 25, ox: -1, oy: -21 },
     barrel: { w: 8, h: 5, hp: 5, ox: -1, oy: -9 },
-    vend: { w: 14, h: 7, hp: 16, ox: -1, oy: -21 }
+    vend: { w: 14, h: 7, hp: 16, ox: -1, oy: -21 },
+    couch: { w: 20, h: 6, hp: 30, ox: -1, oy: -11 }
   };
   let PROPS = [];
   function layoutProps() {
@@ -980,6 +1179,7 @@
   addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'KeyM') { toggleSound(); return; }
+    if (e.code === 'KeyN') { Snd.init(); Snd.next(); return; }
     if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
     if (G && G.state === 'perk' && /^Digit[1-3]$/.test(e.code)) { choosePerk(+e.code.slice(5) - 1); return; }
     if (!G || G.state !== 'play') return;
@@ -1089,13 +1289,19 @@
     patapim:   { r: 8,  hy: 14, hr: 10, hp: 20,  spd: 26, dmg: 16, score: 7,   cost: 6,  from: 6, w: 1.4, heavy: 1 },
     floppa:    { r: 7,  hy: 9,  hr: 9,  hp: 16,  spd: 30, dmg: 18, score: 8,   cost: 6,  from: 6, w: 1.4 },
     lirili:    { r: 7,  hy: 13, hr: 9,  hp: 18,  spd: 20, dmg: 12, score: 7,   cost: 6,  from: 7, w: 1.1 },
+    oiia:      { r: 5,  hy: 9,  hr: 7,  hp: 14,  spd: 26, dmg: 10, score: 8,   cost: 5,  from: 4, w: 1.4 },
+    sigma:     { r: 6,  hy: 14, hr: 8,  hp: 22,  spd: 30, dmg: 14, score: 9,   cost: 6,  from: 5, w: 1.2 },
+    quadro:    { r: 5,  hy: 6,  hr: 7,  hp: 7,   spd: 74, dmg: 9,  score: 4,   cost: 5,  from: 4, w: 1.4 },
+    labubu:    { r: 4,  hy: 7,  hr: 6,  hp: 4,   spd: 62, dmg: 0,  score: 3,   cost: 2,  from: 3, w: 1.2 },
+    evasya:    { r: 5,  hy: 9,  hr: 7,  hp: 20,  spd: 0,  dmg: 0,  score: 5 },
+    skuf:      { r: 14, hy: 28, hr: 22, hp: 900, spd: 20, dmg: 30, score: 500, boss: 'СКУФ: ГЕННАДИЙ ЧЕРЕЗ 10 ЛЕТ', heavy: 1 },
     sixseven:  { r: 5,  hy: 12, hr: 7,  hp: 8,   spd: 45, dmg: 8,  score: 6,   cost: 4,  from: 3, w: 1.8 },
     skboss:    { r: 16, hy: 26, hr: 20, hp: 400, spd: 22, dmg: 25, score: 220, boss: 'СКИБИДИ-УНИТАЗ ПРАЙМ', heavy: 1 },
     fboss:     { r: 18, hy: 20, hr: 22, hp: 420, spd: 26, dmg: 30, score: 220, boss: 'ВЕЛИКАЯ ШЛЁПА', heavy: 1 },
     ouro:      { r: 10, hy: 9,  hr: 13, hp: 300, spd: 44, dmg: 25, score: 300, boss: 'МОДЕЛЬ-КОЛЛАПС: УРОБОРОС', heavy: 1 },
     oseg:      { r: 7,  hy: 8,  hr: 9,  hp: 28,  spd: 0,  dmg: 15, score: 4,   heavy: 1 }
   };
-  const BOSSES = ['jboss', 'mama', 'cboss', 'skboss', 'fboss', 'ouro'];
+  const BOSSES = ['jboss', 'mama', 'cboss', 'skboss', 'fboss', 'ouro', 'skuf'];
   const SPLAT = {
     hand: [P.skin, P.skinD, P.pink], cat: [P.grey, P.pink], kitten: [P.grey, P.pink], spag: [P.noodle, P.red], golem: [P.paper, P.red],
     jesus: [P.shrimp, P.gold], jboss: [P.shrimp, P.gold, P.pink], shark: [P.shark, P.white, P.red], ballerina: [P.coffee, P.coffeeL, P.pink],
@@ -1103,7 +1309,7 @@
     horse: [P.suit, P.horse], horseFree: [P.horse, P.hair], mama: [P.pink, P.pinkD, P.white],
     skibidi: [P.toilet, P.skin, P.cyan], chimp: [P.banana, P.monkey], amogus: [P.sus, P.visor], doge: [P.doge, P.dogeL],
     capy: [P.capy, P.orange], troll: [P.troll, P.greyL], patapim: [P.wood, P.green, P.tan], floppa: [P.floppa, P.floppaD],
-    lirili: [P.cactus, P.grey], sixseven: [P.green, P.skin, P.white], skboss: [P.toilet, P.cyan, P.skin], fboss: [P.floppa, P.floppaD, P.pink], ouro: [P.purple, P.pink, P.gold], oseg: [P.purple, P.gold]
+    lirili: [P.cactus, P.grey], oiia: [P.grey, P.oiiaW, P.pink], sigma: [P.skin, P.turtle], quadro: [P.white, P.brownL, P.orange, P.pink], labubu: [P.lab, P.labP], evasya: [P.track, P.white], skuf: [P.tank, P.skin, P.bottle, P.vest], sixseven: [P.green, P.skin, P.white], skboss: [P.toilet, P.cyan, P.skin], fboss: [P.floppa, P.floppaD, P.pink], ouro: [P.purple, P.pink, P.gold], oseg: [P.purple, P.gold]
   };
   const AFFIX = {
     split:  { name: 'БЕСКОНЕЧНЫЙ СКРОЛЛ', color: P.cyan },
@@ -1171,7 +1377,7 @@
         x: WW / 2, y: WH / 2, r: 5, hy: 9, hr: 6, hp: 100, ang: 0, face: 1, fireT: 0, inv: 0, hit: 0, dashT: 0, dashCd: 0, dashId: 0,
         dx: 1, dy: 0, anim: 0, moving: false, trail: [], recoil: 0, level: 1,
         guns: [{ id: 0, ammo: Infinity, lvl: 0 }], cur: 0, cdQ: 0, cdE: 0, cdC: 0, cdV: 0, cdG: 0, ult: 0, invert: 0, noGun: 0, guilt: false, auraT: 0,
-        hist: [], histT: 0, wobble: false, scramble: 0, slip: 0, sdx: 0, sdy: 0, rooted: false, timeSlow: false
+        hist: [], histT: 0, wobble: false, scramble: 0, slip: 0, cling: 0, sugar: 0, mogged: false, sdx: 0, sdy: 0, rooted: false, timeSlow: false
       },
       cam: { x: 0, y: 0 },
       enemies: [], bullets: [], ebullets: [], portals: [], pickups: [], parts: [], texts: [], beams: [], bombs: [], zones: [], puddles: [], timers: [], mines: [], peels: [], allies: [],
@@ -1208,6 +1414,7 @@
     while (budget > 0) {
       let r = Math.random() * total, k = 'hand';
       for (const [name, t] of pool) { r -= t.w; if (r <= 0) { k = name; break; } }
+      if (k === 'quadro') list.push('quadro', 'quadro'); // стая
       list.push(k); budget -= TYPES[k].cost;
     }
     for (let i = list.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [list[i], list[j]] = [list[j], list[i]]; }
@@ -1216,8 +1423,9 @@
   }
   function startWave(n) {
     G.wave = n; G.phase = 'wave'; G.queue = composition(n); G.spawnT = .5;
+    if (n % 5 === 1) Snd.regular(Math.floor((n - 1) / 5));
     Snd.play('wave');
-    if (n % 5 === 0) { const b = TYPES[BOSSES[(n / 5 - 1) % BOSSES.length]]; banner(`ВОЛНА ${n} · БОСС`, b.boss, 3, P.pink); }
+    if (n % 5 === 0) { const bt = BOSSES[(n / 5 - 1) % BOSSES.length], b = TYPES[bt]; banner(bt === 'skuf' ? `ВОЛНА ${n} · ФИНАЛЬНЫЙ БОСС` : `ВОЛНА ${n} · БОСС`, b.boss, 3.5, bt === 'skuf' ? P.vest : P.pink); }
     else banner(`ВОЛНА ${n}`, `промпт: ${PROMPTS[(n - 1) % PROMPTS.length]}`, 2.8);
   }
   const propAt = (x, y, m = 0) => PROPS.find(r => x > r.x - m && x < r.x + r.w + m && y > r.y - m && y < r.y + r.h + m);
@@ -1254,7 +1462,7 @@
     if (T.boss) {
       const cycle = Math.floor((n - 1) / 30);
       e.hp = e.max = T.hp * (1 + cycle * .8) + n * 25; e.bossName = T.boss; G.boss = e;
-      Snd.play('boss'); Snd.bossMode(true);
+      Snd.play('boss'); Snd.bossMode(true, Math.max(0, Math.floor(n / 5) - 1), type === 'skuf' ? 'hardbass' : null);
     }
     return e;
   }
@@ -1266,9 +1474,11 @@
     if (t === 'cboss') return SPR.croc;
     if (t === 'skboss') return SPR.skibidi;
     if (t === 'fboss') return SPR.floppa;
+    if (t === 'quadro') return SPR.quadro[e.variant % 3];
+    if (t === 'evasya') return SPR.vasya;
     return SPR[t];
   }
-  const scaleOf = e => e.type === 'jboss' || e.type === 'cboss' || e.type === 'skboss' || e.type === 'fboss' ? 2 : 1;
+  const scaleOf = e => e.type === 'jboss' || e.type === 'cboss' || e.type === 'skboss' || e.type === 'fboss' || e.type === 'skuf' ? 2 : 1;
   function spawnOuroSegments(head) {
     let prev = head;
     head.segs = [];
@@ -1303,6 +1513,10 @@
     const p = G.p;
     if (p.dashCd > 0) return;
     p.dashT = .2; p.dashCd = 1.1 * G.mods.dashCd; p.dashId++;
+    if (p.cling) {
+      for (let i = 0; i < p.cling; i++) { const e = makeEnemy('labubu', p.x + rnd(10), p.y + rnd(6), false); e.stun = 1; e.kx = rnd(160); e.ky = rnd(160); G.enemies.push(e); }
+      say(p.x, p.y - 28, 'СТРЯХНУЛ ЛАБУБУ', P.labP); p.cling = 0;
+    }
     burst(p.x, p.y, P.paper, 8, 40); Snd.play('dash');
   }
   function abilityQ() {
@@ -1488,12 +1702,12 @@
   function shoot() {
     const p = G.p, slot = curSlot(), id = activeGunId();
     const lvl = id === slot.id ? slot.lvl : 0;
-    p.fireT = WEAPONS[id].rate / (1 + .12 * lvl) / G.mods.rate * (p.guilt ? 2 : 1) * (p.timeSlow ? 1.4 : 1);
+    p.fireT = WEAPONS[id].rate / (1 + .12 * lvl) / G.mods.rate * (p.guilt ? 2 : 1) * (p.timeSlow ? 1.4 : 1) / (p.sugar > 0 ? 1.6 : 1);
     if (id !== 0 && id === slot.id) {
       slot.ammo--;
       if (slot.ammo <= 0) { slot.ammo = 0; say(p.x, p.y - 26, 'ПАТРОНЫ КОНЧИЛИСЬ', P.pink); cycleGun(1); if (curSlot().ammo <= 0) p.cur = 0; }
     }
-    fireWeapon(id, p.ang, (1 + .25 * lvl) * G.mods.dmg);
+    fireWeapon(id, p.ang, (1 + .25 * lvl) * G.mods.dmg * (p.mogged ? .7 : 1));
     if (id !== 10) Snd.play(WEAPONS[id].sfx, id === 7 || id === 4 || id === 13 ? .06 : .025);
     p.recoil = id === 9 || id === 3 || id === 8 || id === 16 ? 3 : 1.5;
     if (id !== 4 && id !== 9 && id !== 11 && id !== 13 && id !== 14) { const m = muzzle(p.ang); G.parts.push({ x: m.x, y: m.y, vx: 0, vy: 0, life: .05, max: .05, color: P.white, size: 3, flash: true }); }
@@ -1522,6 +1736,8 @@
     if (e.dead || e.charm > 0) return;
     if (e.disguised) { e.disguised = false; say(e.x, e.y - 20, 'SUS!', P.red, true); Snd.play('sus'); }
     if (e.type === 'ouro' && e.segs && e.segs.some(sg => !sg.dead)) { dmg *= .25; if (Math.random() < .04) say(e.x, e.y - 30, 'сначала хвост', P.purple); }
+    if (e.air) return;
+    if (e.type === 'sigma' && dmg < 3 && !noCrit) { dmg *= .2; if (Math.random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
     if (e.type === 'capy' && Math.random() < .06) say(e.x, e.y - 22, pick(['ок', 'ок я подъезжаю', 'спокойно']), P.capy);
     let d = dmg;
     if (!noCrit && G.mods.crit && Math.random() < G.mods.crit) { d *= 3; burst(e.x, bodyY(e), P.gold, 4, 50); }
@@ -1547,6 +1763,7 @@
     splat(x, y + 4, 8, ['#241d2e', '#1a1423']);
     Snd.play('boom', .05);
     for (const e of G.enemies.slice()) {
+      if (e.air) continue;
       const d = Math.hypot(e.x - x, bodyY(e) - y);
       if (d < rad + e.hr) hitEnemy(e, dmg * (1 - d / (rad + e.hr) * .5), (e.x - x) / (d || 1) * 90, (e.y - y) / (d || 1) * 90, true);
     }
@@ -1571,10 +1788,13 @@
     } else if (pr.kind === 'barrel') {
       rubble(pr, [P.cyanD, P.cyan, P.metal]);
       later(.12, () => explode(cx, cy, 42, 7, { pdmg: 16, colors: [P.cyan, P.white, P.cyanD] }));
+    } else if (pr.kind === 'couch') {
+      rubble(pr, [P.couch, P.couchD, P.stain, P.white]);
+      burst(cx, cy, [P.couch, P.white, P.stain], 40, 80, 2); say(cx, cy - 20, 'ДИВАН СЛОМАН', P.red, true); Snd.play('boom');
     } else {
       rubble(pr, [P.red, P.redD, P.white, P.coffeeL]);
       burst(cx, cy, [P.red, P.white, P.coffeeL], 30, 70, 2);
-      G.pickups.push(mkPickup(cx - 8, cy + 12, 'coffee'), mkPickup(cx + 8, cy + 12, 'coffee'), mkPickup(cx, cy + 20, 'ammo'));
+      G.pickups.push(mkPickup(cx - 8, cy + 12, Math.random() < .3 ? 'dubai' : 'coffee'), mkPickup(cx + 8, cy + 12, 'coffee'), mkPickup(cx, cy + 20, 'ammo'));
       say(cx, cy - 20, 'КОФЕ!', P.gold); Snd.play('boom');
     }
   }
@@ -1605,6 +1825,7 @@
     if (e.aff === 'split') for (let i = 0; i < 2; i++) { const k = makeEnemy(e.type, e.x + rnd(6), e.y + rnd(6)); k.hp = k.max = k.max * .5; k.kx = rnd(90); k.ky = rnd(90); G.enemies.push(k); }
     if (boss) {
       G.boss = null; Snd.bossMode(false);
+      if (e.type === 'skuf') later(2, victory);
       G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y + 12, 'gun'), mkPickup(e.x, e.y - 12, 'hp'));
       banner('БОСС ПОВЕРЖЕН', pick(['I’m sorry, I can’t continue', 'модель снята с продакшена', 'ошибка 500: босс не найден']), 2.4, P.gold);
       G.shake = 10;
@@ -1612,6 +1833,8 @@
     }
     if (e.type === 'grandpa' && peaceful) { G.pickups.push(mkPickup(e.x, e.y, 'hp')); return; }
     const m = e.elite ? 3 : 1, r = Math.random(), big = e.r > 7 ? 1.8 : 1;
+    if (Math.random() < .012 * m) { G.pickups.push(mkPickup(e.x, e.y, 'blindbox')); return; }
+    if (Math.random() < .007 * m) { G.pickups.push(mkPickup(e.x, e.y, 'dubai')); return; }
     if (r < .025 * m * big) G.pickups.push(mkPickup(e.x, e.y, 'up'));
     else if (r < (.025 + .02) * m * big) G.pickups.push(mkPickup(e.x, e.y, 'gun'));
     else if (r < (.045 * m + .09) * big) G.pickups.push(mkPickup(e.x, e.y, 'ammo'));
@@ -1643,6 +1866,28 @@
       const notOwned = WEAPONS.map((_, i) => i).filter(i => i && !p.guns.some(s => s.id === i));
       giveGun(notOwned.length && Math.random() < .75 ? pick(notOwned) : pick(p.guns.filter(s => s.id).map(s => s.id).concat(notOwned).concat([1])));
     }
+    if (k.type === 'blindbox') {
+      say(p.x, p.y - 30, 'РАСПАКОВКА…', P.labP, true); Snd.play('unbox');
+      const kx = k.x, ky = k.y;
+      later(.7, () => {
+        if (Math.random() < .3) {
+          banner('СЕКРЕТНАЯ ФИГУРКА', '+50 лайков, апскейл и патроны', 2, P.gold); G.score += 50;
+          G.pickups.push(mkPickup(kx + 10, ky, 'up'), mkPickup(kx - 10, ky, 'ammo')); Snd.play('secret');
+          burst(kx, ky - 6, [P.gold, P.labP, P.white], 30, 70, 2);
+        } else {
+          say(kx, ky - 30, pick(['ДУБЛИКАТ', 'обычная серия', 'опять не та', 'ЛАБУБУ ПРОСНУЛИСЬ']), P.labP, true);
+          for (let i = 0; i < 3; i++) { const e = makeEnemy('labubu', kx + rnd(12), ky + rnd(8), false); e.kx = rnd(140); e.ky = rnd(140); G.enemies.push(e); }
+          Snd.play('meow');
+        }
+      });
+    }
+    if (k.type === 'dubai') {
+      p.hp = Math.min(m.maxHp, p.hp + 40 * m.heal); p.sugar = 6;
+      banner('ДУБАЙСКИЙ ШОКОЛАД', '1500 руб за 100 г · сахарный раш · за тобой очередь', 2.4, P.pist);
+      const ex = p.x < WW / 2 ? 24 : WW - 24;
+      for (let i = 0; i < 8; i++) later(i * .25, () => spawnPortal(pick(['hand', 'hand', 'skibidi', 'sixseven', 'quadro', 'labubu']), ex, clamp(G.p.y + (i - 4) * 12, 24, WH - 16), .5, false));
+      say(p.x, p.y - 30, 'ОЧЕРЕДЬ ЗА ШОКОЛАДОМ', P.pist, true); Snd.play('sugar');
+    }
     if (k.type === 'up') {
       const s = curSlot();
       if (s.lvl < 5) { s.lvl++; if (s.id) s.ammo += R(WEAPONS[s.id].pick * .5); banner(`АПСКЕЙЛ x${2 ** s.lvl}`, WEAPONS[s.id].name, 2, P.cyan); }
@@ -1670,6 +1915,47 @@
   }
   const bulletProp = (x, y) => propAt(x, y + 9);
   function spawnPortal(type, x, y, t = .9, elite) { G.portals.push({ x, y, type, t, max: t, elite: elite == null ? Math.random() < eliteChance() : elite }); Snd.play('portal', .08); }
+  function skufGrain(e) {
+    const p = G.p, sy = e.y - 30, a0 = Math.atan2(p.y - 9 - sy, p.x - e.x);
+    for (let i = 0; i < 12; i++) { const a = a0 + rnd(.5), sp = 70 + Math.random() * 60; G.ebullets.push({ kind: 'grain', x: e.x + e.face * 10, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.8, dmg: 4, r: 2, t: 0 }); }
+    say(e.x, e.y - 70, 'ГРЕЧКА!', P.brownL); Snd.play('shotgun', .2);
+  }
+  function skufBottle(e) {
+    const p = G.p;
+    for (let i = 0; i < 2; i++) G.ebullets.push({ kind: 'bottle', x: e.x, gy: e.y, x0: e.x, gy0: e.y, tx: clamp(p.x + rnd(20), 12, WW - 12), ty: clamp(p.y + rnd(14), 16, WH - 10), t: 0, dur: .8 + i * .15, life: 9, r: 3, dmg: 0, z: 28 });
+    say(e.x, e.y - 70, pick(['ЛОВИ ПЕННОЕ', 'ДЕРЖИ, МОЛОДЁЖЬ']), P.gold); Snd.play('spit', .1);
+  }
+  // фаза 2: скуф пользуется твоим же арсеналом
+  function skufMirror(e) {
+    const p = G.p, sy = e.y - 30, a0 = Math.atan2(p.y - 9 - sy, p.x - e.x);
+    const eb = (a, sp = 150, dmg = 5) => G.ebullets.push({ kind: 'ebullet', x: e.x + e.face * 12, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 2, dmg, r: 2, t: 0 });
+    const move = pick(['makarov', 'shotgun', 'rocket', 'slipper', 'makarov', 'shotgun', e.wifiCd > 0 ? 'rocket' : 'wifi', e.zUsed ? 'slipper' : 'ctrlz', G.enemies.some(x => x.type === 'evasya') ? 'makarov' : 'vasya']);
+    switch (move) {
+      case 'makarov':
+        for (let i = 0; i < 5; i++) later(i * .12, () => { if (!e.dead) { eb(Math.atan2(G.p.y - 9 - sy, G.p.x - e.x) + rnd(.06)); Snd.play('pistol', .05); } });
+        say(e.x, e.y - 70, 'У МЕНЯ ТОЖЕ МАКАРОВ', P.paper); break;
+      case 'shotgun':
+        for (let i = 0; i < 4; i++) eb(a0 + (i - 1.5) * .16, 130, 7);
+        eb(a0 + Math.PI, 130, 7); say(e.x, e.y - 70, 'ПЯТЫЙ СТВОЛ ТОЖЕ НАЗАД', P.paper); Snd.play('shotgun'); break;
+      case 'rocket':
+        G.ebullets.push({ kind: 'erocket', x: e.x, y: sy, vx: Math.cos(a0) * 90, vy: Math.sin(a0) * 90, life: 3, dmg: 14, r: 3, t: 0 });
+        say(e.x, e.y - 70, 'JPEG ДЛЯ ТЕБЯ', P.cyan); Snd.play('rocket'); break;
+      case 'slipper':
+        for (let i = 0; i < 3; i++) { const a = a0 + (i - 1) * .6; G.ebullets.push({ kind: 'eslipper', x: e.x, y: sy, vx: Math.cos(a) * 110, vy: Math.sin(a) * 110, life: 3, dmg: 8, r: 3, t: 0 }); }
+        say(e.x, e.y - 70, 'ТАПКОМ ЕГО', P.pink); Snd.play('slip'); break;
+      case 'wifi':
+        e.wifiCd = 12; const m = G.mods;
+        p.cdQ = 16 * m.cd; p.cdE = 20 * m.cd; p.cdC = 24 * m.cd; p.cdV = 18 * m.cd; p.cdG = 26 * m.cd;
+        banner('ОН ОТКЛЮЧИЛ ТЕБЕ WI-FI', 'все способности на перезарядке', 1.8, P.cyan); Snd.play('emp'); break;
+      case 'ctrlz':
+        e.zUsed = true; e.hp = Math.min(e.max, e.hp + e.max * .1);
+        say(e.x, e.y - 70, 'CTRL+Z (МОЙ)', P.cyan, true); Snd.play('rewind'); break;
+      case 'vasya': {
+        const v = makeEnemy('evasya', clamp(e.x + e.face * 30, 20, WW - 20), clamp(e.y + 10, 24, WH - 16), false);
+        G.enemies.push(v); say(v.x, v.y - 30, 'ЗЛОЙ ДЯДЯ ВАСЯ', P.red, true); Snd.play('ally'); break;
+      }
+    }
+  }
   function dropBomb(x, y, alt, dmg = 14, r = 22) { G.bombs.push({ x: clamp(x, 10, WW - 10), y: clamp(y, 14, WH - 10), t: .95, max: .95, alt, dmg, r }); Snd.play('whistle', .15); }
 
   // ======================= update =======================
@@ -1686,6 +1972,7 @@
     if (keys.KeyA || keys.ArrowLeft) mx--;
     if (keys.KeyD || keys.ArrowRight) mx++;
     if (stick) { const sx = stick.x - stick.ox, sy = stick.y - stick.oy, sl = Math.hypot(sx, sy); if (sl > 8) { mx = sx / Math.max(sl, 50); my = sy / Math.max(sl, 50); } }
+    if (p.sugar > 0 && G.state === 'play') { ctx.fillStyle = `rgba(156,201,90,${.07 + .04 * Math.sin(G.t * 10)})`; ctx.fillRect(0, 0, W, H); }
     if (p.invert > 0) { p.invert -= dt; mx = -mx; my = -my; }
     p.noGun -= dt;
     const ml = Math.hypot(mx, my);
@@ -1697,8 +1984,10 @@
     p.cdC = Math.max(0, p.cdC - dt); p.cdV = Math.max(0, p.cdV - dt); p.cdG = Math.max(0, p.cdG - dt);
     if (m.regen) p.hp = Math.min(m.maxHp, p.hp + m.regen * dt);
     let spd = 78 * m.speed;
-    if (p.rooted) spd *= .5;
+    if (p.rooted) spd *= p.rooted === 'foam' ? .6 : .5;
     if (p.timeSlow) spd *= .55;
+    if (p.cling) { spd *= 1 - .1 * p.cling; p.hp -= p.cling * 1.5 * dt; checkDeath(); }
+    if (p.sugar > 0) { p.sugar -= dt; spd *= 1.25; }
     if (p.slip > 0) {
       p.slip -= dt; mx = p.sdx; my = p.sdy; spd = 150;
       if (Math.random() < .4) G.parts.push({ x: p.x, y: p.y, vx: rnd(10), vy: rnd(10), life: .3, max: .3, color: P.banana, size: 1 });
@@ -1758,6 +2047,7 @@
         const lx = p.x + rnd(50), ly = p.y + rnd(50);
         G.pickups.push(mkPickup(lx, ly, G.wave % 2 === 1 ? 'gun' : 'up'), mkPickup(lx + 14, ly + 6, 'ammo'));
         if (p.hp < m.maxHp * .6) G.pickups.push(mkPickup(lx - 14, ly, 'hp'));
+        if (G.wave % 3 === 0) G.pickups.push(mkPickup(lx, ly + 16, 'blindbox'));
       }
     }
     for (const po of G.portals) {
@@ -1778,7 +2068,7 @@
     for (const z of G.zones) {
       z.t -= dt;
       const inside = Math.hypot(p.x - z.x, (p.y - z.y) * 1.6) < z.r;
-      if (z.kind === 'roots') { if (inside && p.dashT <= 0) p.rooted = true; }
+      if (z.kind === 'roots' || z.kind === 'foam') { if (inside && p.dashT <= 0) p.rooted = z.kind; }
       else if (inside) p.hp = Math.min(m.maxHp, p.hp + 6 * m.heal * dt);
     }
     G.zones = G.zones.filter(z => z.t > 0);
@@ -1860,7 +2150,7 @@
 
   function updateEnemies(dt) {
     const p = G.p, es = G.enemies;
-    let guilt = false, lirSlow = false, wobble = false;
+    let guilt = false, lirSlow = false, wobble = false, mog = false;
     for (const e of es) {
       if (e.dead) continue;
       e.t += dt; e.hitCd -= dt; e.cd -= dt; e.flash -= dt; e.atk -= dt; e.slowT -= dt;
@@ -1883,7 +2173,7 @@
       if (e.type !== 'ballerina' || !(e.spin > 0)) e.face = dx < 0 ? -1 : 1;
       let slow = e.slowT > 0 ? .5 : 1;
       if (e.calm > 0) { slow *= .5; e.calm -= dt; }
-      for (const z of G.zones) if (z.kind !== 'roots' && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) slow *= .4;
+      for (const z of G.zones) if (!z.kind && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) slow *= .4;
       const spd = e.spd * slow;
       let vx = dx / d * spd, vy = dy / d * spd;
 
@@ -1995,6 +2285,105 @@
         case 'lirili':
           if (d < 75) lirSlow = true;
           break;
+        case 'oiia': {
+          let rate = 5;
+          if (e.state === 'walk') { if (e.cd <= 0 && d < 150) { e.state = 'spin'; e.st = 3.5; say(e.x, e.y - 24, 'OIIA OIIA', P.white, true); } }
+          else if (e.state === 'spin') {
+            e.st -= dt; const k = 1 - e.st / 3.5; rate = 10 + k * 34;
+            vx = dx / d * spd * (1 + k * 3) + Math.cos(e.t * 9) * 40 * k; vy = dy / d * spd * (1 + k * 3) + Math.sin(e.t * 11) * 40 * k;
+            if (Math.random() < dt * (3 + k * 8)) Snd.play('oiia', .12);
+            if (Math.random() < .4) G.parts.push({ x: e.x + rnd(8), y: e.y - Math.random() * 10, vx: rnd(40), vy: -20, life: .3, max: .3, color: pick([P.white, P.grey]), size: 1 });
+            if (e.st <= 0) { e.state = 'air'; e.st = .6; e.air = true; Snd.play('oiia'); say(e.x, e.y - 24, 'OIIAAAAA', P.white, true); }
+          } else if (e.state === 'air') {
+            rate = 40; vx = vy = 0; e.st -= dt; e.z = (1 - Math.max(0, e.st) / .6) * 160;
+            if (e.st <= 0) { e.state = 'fall'; e.st = 1.1; e.x = clamp(p.x + p.dx * 18, 16, WW - 16); e.y = clamp(p.y + p.dy * 18, 24, WH - 16); }
+          } else if (e.state === 'fall') {
+            rate = 40; vx = vy = 0; e.st -= dt; e.z = Math.max(0, e.st / 1.1) * 160;
+            if (e.st <= 0) {
+              e.state = 'walk'; e.air = false; e.z = 0; e.cd = 4 + Math.random() * 2;
+              explode(e.x, e.y - 4, 30, 3, { pdmg: 16, colors: [P.white, P.grey, P.pink] });
+              say(e.x, e.y - 30, 'OIIA!!!', P.white, true);
+            }
+          }
+          e.sp = (e.sp || 0) + dt * rate;
+          break;
+        }
+        case 'sigma':
+          if (d < 110) mog = true;
+          if (d < 60) { vx *= .3; vy *= .3; }
+          if (Math.random() < dt * .15) { say(e.x, e.y - 34, pick(['сигма бой', '*мьюинг*', 'не впечатлён', 'гриндсет', 'я не такой, как все']), P.greyL); Snd.play('sigma', 2); }
+          break;
+        case 'quadro':
+          if (e.state === 'leap') {
+            vx = vy = 0; e.st -= dt;
+            const k = 1 - Math.max(0, e.st) / .35;
+            e.x = e.lx0 + (e.ltx - e.lx0) * k; e.y = e.ly0 + (e.lty - e.ly0) * k; e.z = Math.sin(k * Math.PI) * 10;
+            if (e.st <= 0) { e.state = 'walk'; e.z = 0; e.cd = 1.6; if (Math.hypot(p.x - e.x, p.y - e.y) < 12) hurt(e.dmg, e.variant % 3 === 1 ? 'ГАВ' : 'МЯУ'); }
+          } else {
+            const side = (e.variant % 3 - 1) * 1.2, base = Math.atan2(-dy, -dx) + side, off = d > 50 ? 40 : 0;
+            const tdx = p.x + Math.cos(base) * off - e.x, tdy = p.y + Math.sin(base) * off * .7 - e.y, td = Math.hypot(tdx, tdy) || 1;
+            vx = tdx / td * spd; vy = tdy / td * spd;
+            if (d < 38 && e.cd <= 0) { e.state = 'leap'; e.st = .35; e.lx0 = e.x; e.ly0 = e.y; e.ltx = p.x; e.lty = p.y; Snd.play(e.variant % 3 === 1 ? 'woof' : 'meow', .15); }
+            if (Math.random() < dt * .1) say(e.x, e.y - 20, pick(['мяу', 'гав', 'я квадробер', 'фыр', 'не трогай хвост', 'у меня хвост']), P.paper);
+          }
+          break;
+        case 'labubu': {
+          const hop = Math.sin(e.t * 8) > 0 ? 1.6 : .25;
+          vx *= hop; vy *= hop;
+          e.bite = (e.bite || 0) - dt;
+          if (d < 16) e.bite = .2;
+          if (d < e.r + p.r + 2 && p.dashT <= 0 && p.cling < 5) {
+            e.dead = true; p.cling++;
+            say(p.x, p.y - 26, p.cling > 2 ? `ЛАБУБУ x${p.cling}` : 'ЛАБУБУ ПРИЦЕПИЛСЯ', P.labP); Snd.play('meow', .1);
+          }
+          break;
+        }
+        case 'evasya':
+          vx = vy = 0; e.life2 = (e.life2 == null ? 15 : e.life2) - dt;
+          if (e.cd <= 0 && d < 200) {
+            e.cd = .45;
+            const sy = e.y - 9, a = Math.atan2(p.y - 9 - sy, p.x - e.x) + rnd(.08);
+            G.ebullets.push({ kind: 'ebullet', x: e.x + e.face * 6, y: sy, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, life: 1.8, dmg: 5, r: 2, t: 0 });
+            Snd.play('pistol', .1);
+          }
+          if (Math.random() < dt * .2) say(e.x, e.y - 28, pick(['Гена, сдавайся', 'я теперь за него', 'мне обещали дачу']), P.red);
+          if (e.life2 <= 0) { e.dead = true; burst(e.x, e.y - 10, [P.track, P.white], 20, 60); say(e.x, e.y - 28, 'ушёл на дачу', P.paper); }
+          break;
+        case 'skuf': {
+          const hpk = e.hp / e.max;
+          e.wifiCd = (e.wifiCd || 0) - dt;
+          if (!e.intro) { e.intro = true; e.cd = 2; say(e.x, e.y - 70, 'ГЕНА, Я — ЭТО ТЫ ЧЕРЕЗ 10 ЛЕТ', P.vest, true); Snd.play('skuf'); }
+          if (Math.random() < dt * .12) say(e.x, e.y - 70, pick(['в наше время слоп был натуральный', 'гречка с сосиской — база', 'ща как дам', 'где мой пульт', 'ты тоже таким станешь']), P.paper);
+          if (e.couch && !e.couch.dead) {
+            vx = vy = 0; e.hp = Math.min(e.max, e.hp + e.max * .035 * dt); e.face = 1;
+            e.tv = (e.tv == null ? 2 : e.tv) - dt;
+            if (e.tv <= 0) {
+              e.tv = 3.2;
+              for (let i = 0; i < 2; i++) { const sp = spawnPoint(30, { x: e.couch.x + 10, y: e.couch.y + 20, r: 50 }); spawnPortal(pick(['hand', 'skibidi', 'sixseven', 'quadro', 'labubu', 'doge']), sp.x, sp.y, .7, false); }
+              say(e.x, e.y - 70, 'по телеку опять слоп', P.paper);
+            }
+            if (Math.random() < dt * 4) G.parts.push({ x: e.x + rnd(10), y: e.y - 50, vx: rnd(6), vy: -14, life: .7, max: .7, color: P.green, size: 1 });
+            break;
+          }
+          if (e.couch && e.couch.dead && !e.enraged) { e.enraged = true; e.couch = null; e.spd *= 1.8; banner('ТЫ СЛОМАЛ МОЙ ДИВАН', 'скуф в ярости', 1.8, P.red); Snd.play('skuf'); }
+          if (!e.couchUsed && hpk < .4) {
+            e.couchUsed = true;
+            const cx = clamp(e.x - 10, 24, WW - 44), cy = clamp(e.y - 30, 30, WH - 40);
+            const c = { kind: 'couch', x: cx, y: cy, w: PROPDEF.couch.w, h: PROPDEF.couch.h, hp: PROPDEF.couch.hp * (1 + G.wave / 35), max: 0, seed: 0, flash: 0 };
+            c.max = c.hp; PROPS.push(c); e.couch = c; e.x = cx + 10; e.y = cy + c.h + e.r + 1;
+            banner('СКУФ ЛЁГ НА ДИВАН', 'сломай диван, пока он не отлежался', 2, P.vest); Snd.play('skuf');
+            break;
+          }
+          if (e.state === 'wind') { vx = vy = 0; e.st -= dt; e.cdx = dx / d; e.cdy = dy / d; if (e.st <= 0) { e.state = 'charge'; e.st = .6; } break; }
+          if (e.state === 'charge') { vx = e.cdx * 240; vy = e.cdy * 240; e.st -= dt; if (e.st <= 0) { e.state = 'walk'; e.cd = 1.2; skufGrain(e); } break; }
+          if (e.cd <= 0 && d < 260) {
+            const phase = e.enraged ? 3 : hpk > .7 ? 1 : 2;
+            if (phase === 1) { e.cd = 2.2; if (Math.random() < .55) skufGrain(e); else skufBottle(e); }
+            else if (phase === 2) { e.cd = 1.7; skufMirror(e); }
+            else { e.cd = 1.4; if (Math.random() < .5) { e.state = 'wind'; e.st = .5; say(e.x, e.y - 70, 'ПУЗОМ!', P.red, true); Snd.play('charge'); } else skufGrain(e); }
+          }
+          break;
+        }
         case 'sixseven':
           if (d < 70) { vx = -vx * .5 + (-dy / d) * spd * .5; vy = -vy * .5 + (dx / d) * spd * .5; }
           if (d < 90) wobble = true;
@@ -2163,6 +2552,7 @@
     p.guilt = guilt;
     p.timeSlow = lirSlow;
     p.wobble = wobble;
+    p.mogged = mog;
     for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
       const a = es[i], b = es[j];
       if (!!a.alt !== !!b.alt || (a.noSep && b.noSep)) continue;
@@ -2174,7 +2564,7 @@
     for (const e of es) {
       if (e.alt || e.noSep) { e.x = clamp(e.x, 16, WW - 16); e.y = clamp(e.y, 30, WH - 10); continue; }
       const pr = pushOut(e);
-      if (pr && e.type === 'shark' && e.state === 'charge') {
+      if (pr && (e.type === 'shark' || e.type === 'skuf') && e.state === 'charge') {
         damageProp(pr, 12); e.state = 'walk'; e.cd = 2.5; e.stun = 1; e.stunKind = 'bonk';
         say(e.x, e.y - 22, 'БОНК', P.white); G.shake = Math.max(G.shake, 3); Snd.play('book');
       }
@@ -2240,9 +2630,14 @@
       }
       if (pr && b.kind === 'flame') damageProp(pr, b.dmg * .3);
       for (const e of G.enemies) {
-        if (e.dead || b.hits.has(e)) continue;
+        if (e.dead || e.air || b.hits.has(e)) continue;
         const dx = e.x - b.x, dy = bodyY(e) - b.y, hrr = e.hr + (b.kind === 'sonic' ? b.w : 0);
         if (!(e.charm > 0) && dx * dx + dy * dy < hrr * hrr) {
+          if (e.type === 'oiia' && e.state === 'spin' && b.kind !== 'rocket') {
+            b.life = 0; e.sp += 2;
+            if (Math.random() < .2) say(e.x, e.y - 22, pick(['OIIA', 'ням', 'i-i-a']), P.white);
+            break;
+          }
           if (e.type === 'ballerina' && e.spin > 0 && b.kind !== 'rocket' && b.kind !== 'flame') {
             const a = Math.atan2(p.y - 9 - b.y, p.x - b.x);
             G.ebullets.push({ x: b.x, y: b.y, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, life: 1.5, dmg: 6, kind: 'reflect', r: 2, t: 0 });
@@ -2270,20 +2665,34 @@
     G.enemies = G.enemies.filter(e => !e.dead);
 
     for (const b of G.ebullets) {
-      if (b.kind === 'peel') {
-        b.t += dt; const k = Math.min(1, b.t / b.dur);
-        b.x = b.x0 + (b.tx - b.x0) * k; b.gy = b.gy0 + (b.ty - b.gy0) * k; b.z = 12 * (1 - k) + Math.sin(k * Math.PI) * 20; b.y = b.gy - b.z;
-        if (k >= 1) { b.life = 0; G.peels.push({ x: b.tx, y: b.ty, t: 10 }); }
+      if (b.kind === 'peel' || b.kind === 'bottle') {
+        b.t += dt; const k = Math.min(1, b.t / b.dur), h0 = b.kind === 'bottle' ? 28 : 12;
+        b.x = b.x0 + (b.tx - b.x0) * k; b.gy = b.gy0 + (b.ty - b.gy0) * k; b.z = h0 * (1 - k) + Math.sin(k * Math.PI) * 20; b.y = b.gy - b.z;
+        if (k >= 1) {
+          b.life = 0;
+          if (b.kind === 'peel') G.peels.push({ x: b.tx, y: b.ty, t: 10 });
+          else { G.zones.push({ x: b.tx, y: b.ty, r: 22, t: 5, max: 5, kind: 'foam' }); burst(b.tx, b.ty - 2, [P.bottle, P.white, P.gold], 14, 60); Snd.play('bottle', .05); }
+        }
         continue;
+      }
+      if (b.kind === 'eslipper') {
+        const want = Math.atan2(p.y - 9 - b.y, p.x - b.x), cur = Math.atan2(b.vy, b.vx);
+        const na = cur + clamp(((want - cur + Math.PI * 3) % TAU) - Math.PI, -2.6 * dt, 2.6 * dt);
+        b.vx = Math.cos(na) * 110; b.vy = Math.sin(na) * 110;
+      }
+      if (b.kind === 'erocket') {
+        G.parts.push({ x: b.x, y: b.y, vx: rnd(8), vy: rnd(8), life: .3, max: .3, color: pick([P.red, P.vest]), size: 2 });
+        if (b.life <= dt) { b.life = 0; explode(b.x, b.y, 24, 2, { pdmg: b.dmg, colors: [P.red, P.vest, P.gold] }); continue; }
       }
       const sp = G.mods.ebs;
       b.x += b.vx * dt * sp; b.y += b.vy * dt * sp; b.life -= dt; b.t += dt;
       const pr = bulletProp(b.x, b.y);
-      if (pr) { b.life = 0; damageProp(pr, 1); }
+      if (pr) { b.life = 0; if (b.kind === 'erocket') explode(b.x, b.y, 24, 2, { pdmg: b.dmg, colors: [P.red, P.vest, P.gold] }); else damageProp(pr, 1); }
       else if (Math.hypot(b.x - p.x, b.y - (p.y - p.hy)) < b.r + p.hr - 1) {
         b.life = 0;
+        if (b.kind === 'erocket') { explode(b.x, b.y, 24, 2, { pdmg: b.dmg, colors: [P.red, P.vest, P.gold] }); continue; }
         if (b.kind === 'digit') { p.scramble = 6.7; }
-        hurt(b.dmg, { amen: 'аминь', noodle: 'лапша на ушах', letter: 'delve', reflect: 'па-де-де', word: b.w, drop: 'мокро', fur: 'шерсть', digit: b.ch === '6' ? 'SIX' : 'SEVEN' }[b.kind]);
+        hurt(b.dmg, { amen: 'аминь', noodle: 'лапша на ушах', letter: 'delve', reflect: 'па-де-де', word: b.w, drop: 'мокро', fur: 'шерсть', digit: b.ch === '6' ? 'SIX' : 'SEVEN', grain: 'гречка', ebullet: 'от себя не убежишь', eslipper: 'ТАПКОМ' }[b.kind]);
       }
     }
     G.ebullets = G.ebullets.filter(b => b.life > 0);
@@ -2297,6 +2706,7 @@
     G.texts = G.texts.filter(t => t.t > 0);
     if (G.texts.length > 40) G.texts.splice(0, G.texts.length - 40);
     G.shake = Math.max(0, G.shake - dt * 16);
+    if (G.toast) { G.toast.t -= dt; if (G.toast.t <= 0) G.toast = null; }
     G.flash = Math.max(0, G.flash - dt);
   }
 
@@ -2335,17 +2745,22 @@
     const behind = Math.sin(p.ang) < -.35;
     if (behind) drawGun(p);
     blit(spr, f, p.x, p.y, p.face, { color: p.hit > 0 ? '#ffffff' : null });
+    const CL = [[-7, -4], [6, -2], [-3, -13], [8, -11], [0, 3]];
+    for (let i = 0; i < p.cling; i++) blit(SPR.labubu, ((G.t * 6 + i) | 0) % 2 ? 3 : 0, p.x + CL[i][0] * p.face, p.y + CL[i][1] + (((G.t * 8 + i) | 0) % 2), -p.face);
     const extra = p.hp > 60 ? 0 : p.hp > 30 ? 1 : 3;
     lx.fillStyle = P.skin;
     for (let i = 0; i < extra; i++) lx.fillRect(R(p.x - p.face * (6 + i)), R(p.y - 7 + ((G.t * 6 + i) | 0) % 2), 1, 2);
     if (!behind) drawGun(p);
   }
-  const FPS = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8 };
+  const FPS = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8, sigma: 6, quadro: 14, skuf: 4 };
   function enemyFrame(e) {
     if (e.type === 'spag' && e.atk > 0) return 4;
     if (e.type === 'shark' && e.state === 'wind') return 4;
     if (e.type === 'floppa' || e.type === 'fboss') return e.state === 'crouch' ? 2 : e.state === 'leap' ? 3 : ((e.t * 3) | 0) % 2;
     if (e.type === 'patapim') return e.state === 'stomp' ? 3 : [0, 1, 2, 1][((e.t * 6) | 0) % 4];
+    if (e.type === 'oiia') return (e.sp | 0) % 8;
+    if (e.type === 'labubu') return e.bite > 0 ? 3 : [0, 1, 2, 1][((e.t * 10) | 0) % 4];
+    if (e.type === 'evasya') return ((e.t * 2) | 0) % 2;
     if (e.type === 'troll' || e.type === 'ouro') return ((e.t * 4) | 0) % 2;
     if (e.type === 'tung') return e.state === 'hop' ? 1 : e.state === 'smack' ? 2 : e.atk > 0 ? 3 : ((e.t * 3) | 0) % 2;
     return ((e.t * (FPS[e.type] || 6) * (e.aff === 'fast' ? 1.8 : 1)) | 0) % 4;
@@ -2399,7 +2814,7 @@
     if (k.t < 3 && ((k.t * 8) | 0) % 2) return;
     const lift = R(Math.sin(k.bob) * 1.5) - 2;
     drawShadow(k.x, k.y, 5);
-    const spr = { ammo: SPR.ammo, hp: SPR.grass, up: SPR.disk, gun: SPR.gunbox, coffee: SPR.coffee }[k.type];
+    const spr = { ammo: SPR.ammo, hp: SPR.grass, up: SPR.disk, gun: SPR.gunbox, coffee: SPR.coffee, blindbox: SPR.blindbox, dubai: SPR.dubai }[k.type];
     blit(spr, ((G.t * 3) | 0) % spr.n, k.x, k.y + lift, 1);
   }
   const labels = [];
@@ -2418,6 +2833,11 @@
     labels.length = 0;
 
     for (const z of G.zones) {
+      if (z.kind === 'foam') {
+        lx.globalAlpha = Math.min(1, z.t) * .85;
+        for (let i = 0; i < 30; i++) { const ang = i * 2.4, rr = (i % 6) / 6 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6; lx.fillStyle = i % 3 ? P.white : P.gold; lx.fillRect(R(x), R(y) - (((G.t * 3 + i) | 0) % 2), 1 + (i % 2), 1); }
+        lx.globalAlpha = 1; continue;
+      }
       if (z.kind === 'roots') {
         lx.globalAlpha = Math.min(1, z.t);
         for (let i = 0; i < 26; i++) {
@@ -2447,6 +2867,10 @@
       const pr = 1 - b.t / b.max, blink = ((G.t * (6 + pr * 14)) | 0) % 2;
       lx.fillStyle = blink ? P.red : P.vest;
       for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; lx.fillRect(R(b.x + Math.cos(a) * b.r * (.4 + pr * .6)), R(b.y + Math.sin(a) * b.r * .5 * (.4 + pr * .6)), 1, 1); }
+    }
+    for (const e of G.enemies) if (e.type === 'oiia' && e.state === 'fall') {
+      const k = 1 - e.st / 1.1; lx.fillStyle = ((G.t * (6 + k * 14)) | 0) % 2 ? P.red : P.white;
+      for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; lx.fillRect(R(e.x + Math.cos(a) * 20 * (.4 + k * .6)), R(e.y + Math.sin(a) * 10 * (.4 + k * .6)), 1, 1); }
     }
     for (const po of G.portals) {
       const pr = 1 - po.t / po.max, boss = !!TYPES[po.type].boss, rad = boss ? 16 : 8, n = boss ? 28 : 16;
@@ -2534,6 +2958,11 @@
       if (b.kind === 'amen') { lx.fillStyle = ((b.t * 8) | 0) % 2 ? P.white : P.gold; lx.fillRect(R(b.x), R(b.y - 2), 1, 5); lx.fillRect(R(b.x - 1), R(b.y - 1), 3, 1); }
       else if (b.kind === 'letter') blit(SPR.letters[b.ch], 0, b.x, b.y, 1);
       else if (b.kind === 'word') blit(SPR.words[b.w], 0, b.x, b.y, 1);
+      else if (b.kind === 'grain') { lx.fillStyle = P.brownL; lx.fillRect(R(b.x), R(b.y), 1, 1); }
+      else if (b.kind === 'ebullet') { lx.fillStyle = P.stripe; lx.fillRect(R(b.x), R(b.y), 1, 1); lx.fillStyle = P.red; lx.fillRect(R(b.x - b.vx * .012), R(b.y - b.vy * .012), 1, 1); }
+      else if (b.kind === 'erocket') { lx.fillStyle = P.red; lx.fillRect(R(b.x - 2), R(b.y - 1), 4, 2); lx.fillStyle = P.vest; lx.fillRect(R(b.x - 2), R(b.y - 1), 1, 2); }
+      else if (b.kind === 'eslipper') { lx.save(); lx.translate(R(b.x), R(b.y)); lx.rotate(Math.atan2(b.vy, b.vx)); lx.drawImage(tint(SPR.slipper, 0, P.red), -4, -2); lx.restore(); }
+      else if (b.kind === 'bottle') { drawShadow(b.x, b.gy, 2, .3); lx.save(); lx.translate(R(b.x), R(b.y)); lx.rotate(R(b.t * 12 / (Math.PI / 4)) * (Math.PI / 4)); lx.drawImage(SPR.bottle.frames[0], -2, -4); lx.restore(); }
       else if (b.kind === 'digit') blit(SPR.digits[b.ch], 0, b.x, b.y + R(Math.sin(b.t * 14) * 1.5), 1);
       else if (b.kind === 'peel') { drawShadow(b.x, b.gy, 2, .3); blit(SPR.peel, 0, b.x, b.y, 1); }
       else if (b.kind === 'drop') { lx.fillStyle = ((b.t * 10) | 0) % 2 ? P.white : P.cyan; lx.fillRect(R(b.x - 1), R(b.y - 1), 2, 3); }
@@ -2647,17 +3076,21 @@
     if (p.guilt) warn('ДЕДУ ГРУСТНО: СТРЕЛЬБА x0.5');
     if (p.invert > 0) warn('TEMPERATURE 2.0: УПРАВЛЕНИЕ НАОБОРОТ');
     if (p.noGun > 0) warn('NEGATIVE PROMPT: NO GUNS');
-    if (p.rooted) warn('КОРНИ ПАТАПИМА: СКОРОСТЬ x0.5');
+    if (p.rooted) warn(p.rooted === 'foam' ? 'ПЕННАЯ ЛУЖА: СКОРОСТЬ x0.6' : 'КОРНИ ПАТАПИМА: СКОРОСТЬ x0.5');
+    if (p.mogged) warn('ТЕБЯ ЗАМОГАЛИ: УРОН x0.7');
+    if (p.sugar > 0) warn(`САХАРНЫЙ РАШ ${Math.ceil(p.sugar)}`);
+    if (p.cling) warn(`НА ТЕБЕ ЛАБУБУ: ${p.cling} · КУВЫРОК — СТРЯХНУТЬ`);
     if (p.timeSlow) warn('ЛИРИЛИ ЛАРИЛА: ВРЕМЯ ЗАМЕДЛЕНО');
     if (p.slip > 0) warn('СКОЛЬЗИШЬ НА БАНАНЕ');
     if (p.wobble) warn('SIX SEVEN: РУКИ КАЧАЮТСЯ');
     if (p.scramble > 0) warn('SIX SEVEN: ЦИФРЫ СЛОМАНЫ');
     // score
-    if (narrow) { txt(`${G.score} ЛАЙКОВ · ВОЛНА ${G.wave}`, pad, sy, P.gold); sy += 16; }
+    if (narrow) { txt(`${G.score} ЛАЙКОВ · ВОЛНА ${G.wave}`, pad, sy, P.gold); sy += 16; if (G.toast) { txt(G.toast.txt, pad, sy, P.cyan); sy += 14; } }
     else {
       txt(`${G.score} ЛАЙКОВ`, W - pad, pad, P.gold, 16, 'right');
       txt(G.wave ? `ВОЛНА ${G.wave} · СЛОПА: ${G.enemies.length + G.queue.length + G.portals.length}` : 'ПОДГОТОВКА', W - pad, pad + 24, P.paper, 8, 'right');
-      txt(Snd.on ? 'ЗВУК: M' : 'ЗВУК ВЫКЛ: M', W - pad, pad + 38, '#6f6780', 8, 'right');
+      txt(Snd.on ? 'ЗВУК: M · ТРЕК: N' : 'ЗВУК ВЫКЛ: M', W - pad, pad + 38, '#6f6780', 8, 'right');
+      if (G.toast) { ctx.globalAlpha = Math.min(1, G.toast.t); txt(G.toast.txt, W - pad, pad + 54, P.cyan, 8, 'right'); ctx.globalAlpha = 1; }
     }
     // weapon slots
     const gap = 6, sw = Math.max(18, Math.min(34, Math.floor((W - pad * 2) / p.guns.length) - gap)), n = p.guns.length, totalW = n * (sw + gap) - gap;
@@ -2798,11 +3231,18 @@
       $('btn-restart').focus();
     }, 1100);
   }
+  function victory() {
+    if (G.state !== 'play') return;
+    G.state = 'victory'; mouse.down = false;
+    $('win-stats').textContent = `Волна ${G.wave} · уровень ${G.p.level} · слопа убрано: ${G.kills} · лайков: ${G.score} · пушек: ${G.p.guns.length}`;
+    $('win').hidden = false; $('btn-continue').focus();
+    Snd.play('secret');
+  }
   function start() {
     Snd.init();
     newGame();
-    Snd.bossMode(false); Snd.music(true);
-    $('start').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('perks').hidden = true;
+    Snd.regular(0); Snd.bossMode(false); Snd.music(true);
+    $('start').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('perks').hidden = true; $('win').hidden = true;
   }
   function togglePause() {
     if (!G || G.state === 'dead' || G.state === 'attract' || G.state === 'perk') return;
@@ -2821,6 +3261,8 @@
   $('btn-start').addEventListener('click', start);
   $('btn-restart').addEventListener('click', start);
   $('btn-resume').addEventListener('click', togglePause);
+  $('btn-continue').addEventListener('click', () => { $('win').hidden = true; G.state = 'play'; banner('БЕСКОНЕЧНЫЙ РЕЖИМ', 'слоп возвращается сильнее', 2.4, P.pink); });
+  $('btn-win-restart').addEventListener('click', start);
   for (const b of document.querySelectorAll('.snd-toggle')) b.addEventListener('click', toggleSound);
   document.addEventListener('visibilitychange', () => { if (document.hidden && G && G.state === 'play') togglePause(); });
 
@@ -2853,12 +3295,13 @@
       G.enemies.push(e);
     }
     G.boss = null;
+    Snd.onTrack = name => { if (G) G.toast = { txt: '♪ ' + name, t: 3.5 }; };
     G.cam.x = R(VW < WW ? clamp(G.p.x - VW / 2, 0, WW - VW) : (WW - VW) / 2);
     G.cam.y = R(VH < WH ? clamp(G.p.y - VH / 2, 0, WH - VH) : (WH - VH) / 2);
     requestAnimationFrame(frame);
   };
   window.__slop = () => G;
-  window.__slopDebug = { makeEnemy: (t, x, y, el) => { const e = makeEnemy(t, x, y, el); G.enemies.push(e); return e; }, giveGun: id => giveGun(id), PROPS: () => PROPS, spawnSeg: h => spawnOuroSegments(h), snd: () => Snd.debug };
+  window.__slopDebug = { makeEnemy: (t, x, y, el) => { const e = makeEnemy(t, x, y, el); G.enemies.push(e); return e; }, giveGun: id => giveGun(id), PROPS: () => PROPS, spawnSeg: h => spawnOuroSegments(h), snd: () => Snd.debug, hit: (e, d) => hitEnemy(e, d, 0, 0, true), hitProp: (pr, d) => damageProp(pr, d) };
   (document.fonts && document.fonts.load ? Promise.race([
     Promise.all([document.fonts.load(`8px 'Press Start 2P'`), document.fonts.load(`800 14px 'JetBrains Mono'`)]),
     new Promise(r => setTimeout(r, 1500))
