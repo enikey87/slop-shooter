@@ -272,6 +272,7 @@
       secret() { arp([523, 659, 784, 1046, 1319, 1568], .06, 'square', .08, .1); },
       sugar() { arp([392, 523, 659, 784, 1046], .04, 'square', .07, .08); },
       bottle() { tone(2400, 2200, .06, 'triangle', .08); noise(.15, .15, 3000, 'highpass', .03); },
+      roar() { tone(90, 50, .9, 'sawtooth', .22); noise(.8, .3, 900, 'lowpass', 0, 120); tone(140, 70, .7, 'square', .08, .05); },
       sixseven() { tone(330, 330, .12, 'square', .07); tone(440, 440, .16, 'square', .07, .16); },
       peel() { tone(900, 200, .3, 'sine', .12); },
       whistle() { tone(1500, 500, .85, 'sine', .04); },
@@ -505,6 +506,27 @@
       if (f === 0) s.pix = g.list();
     }
     return s;
+  }
+  // поломанные кадры босса: трещины (фаза 2) и трещины + красный накал (фаза 3)
+  function damaged(spr, f, lvl) {
+    const cache = spr.dmgC || (spr.dmgC = {}), key = lvl + ':' + f;
+    if (cache[key]) return cache[key];
+    const c = document.createElement('canvas'); c.width = spr.w; c.height = spr.h;
+    const x = c.getContext('2d');
+    x.drawImage(spr.frames[f], 0, 0);
+    x.globalCompositeOperation = 'source-atop';
+    let seed = (spr.w * 131 + spr.h * 71 + lvl * 997) | 0;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let i = 0; i < (lvl === 1 ? 6 : 13); i++) {
+      let cx = rng() * spr.w, cy = rng() * spr.h, a = rng() * TAU;
+      x.fillStyle = i % 3 ? '#1a1423' : '#4a0f1e';
+      for (let k = 0; k < 4 + rng() * 7; k++) { x.fillRect(cx | 0, cy | 0, 1, 1); a += (rng() - .5) * 1.4; cx += Math.cos(a); cy += Math.sin(a); }
+    }
+    if (lvl >= 2) {
+      x.fillStyle = 'rgba(224,65,58,.3)'; x.fillRect(0, 0, spr.w, spr.h);
+      for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#2a1414' : '#ff7a1a'; x.fillRect((rng() * spr.w) | 0, (rng() * spr.h) | 0, 2, 1); }
+    }
+    return (cache[key] = c);
   }
   function tint(spr, f, color) {
     const arr = spr.tints[color] || (spr.tints[color] = []);
@@ -1294,7 +1316,7 @@
     quadro:    { r: 5,  hy: 6,  hr: 7,  hp: 7,   spd: 74, dmg: 9,  score: 4,   cost: 5,  from: 4, w: 1.4 },
     labubu:    { r: 4,  hy: 7,  hr: 6,  hp: 4,   spd: 62, dmg: 0,  score: 3,   cost: 2,  from: 3, w: 1.2 },
     evasya:    { r: 5,  hy: 9,  hr: 7,  hp: 20,  spd: 0,  dmg: 0,  score: 5 },
-    skuf:      { r: 14, hy: 28, hr: 22, hp: 900, spd: 20, dmg: 30, score: 500, boss: 'СКУФ: ГЕННАДИЙ ЧЕРЕЗ 10 ЛЕТ', heavy: 1 },
+    skuf:      { r: 14, hy: 28, hr: 22, hp: 900, spd: 20, dmg: 30, score: 500, boss: 'СКУФ: ГЕННАДИЙ ЧЕРЕЗ 10 ЛЕТ', heavy: 1, phases: [.7, .4] },
     sixseven:  { r: 5,  hy: 12, hr: 7,  hp: 8,   spd: 45, dmg: 8,  score: 6,   cost: 4,  from: 3, w: 1.8 },
     skboss:    { r: 16, hy: 26, hr: 20, hp: 400, spd: 22, dmg: 25, score: 220, boss: 'СКИБИДИ-УНИТАЗ ПРАЙМ', heavy: 1 },
     fboss:     { r: 18, hy: 20, hr: 22, hp: 420, spd: 26, dmg: 30, score: 220, boss: 'ВЕЛИКАЯ ШЛЁПА', heavy: 1 },
@@ -1479,6 +1501,36 @@
     return SPR[t];
   }
   const scaleOf = e => e.type === 'jboss' || e.type === 'cboss' || e.type === 'skboss' || e.type === 'fboss' || e.type === 'skuf' ? 2 : 1;
+  const bossFrac = e => e.segs ? (e.hp + e.segs.reduce((a, sg) => a + (sg.dead ? 0 : Math.max(0, sg.hp)), 0)) / (e.max + e.segMax) : e.hp / e.max;
+  const PHASE_NAMES = {
+    jboss: ['БЛАГОСЛОВЛЯЕТ', 'ЖАРЕНЫЙ', 'В КЛЯРЕ'], mama: ['ПЕЧАТАЕТ…', 'TEMPERATURE 2.0', 'ГАЛЛЮЦИНИРУЕТ'],
+    cboss: ['БОМБАРДИРУЕТ', 'ПИКИРУЕТ', 'ГОРИТ'], skboss: ['ПОЁТ', 'СМЫВАЕТ', 'ЗАСОР'],
+    fboss: ['ШЛЁПАЕТ', 'ДВОЙНОЙ ШЛЁП', 'ШЛЁПА ГНЕВАЕТСЯ'], ouro: ['ЖРЁТ ХВОСТ', 'ПЕРЕОБУЧАЕТСЯ', 'КОЛЛАПС'],
+    skuf: ['ВОРЧИТ', 'ЗЕРКАЛИТ ТЕБЯ', 'ДИВАН И ЯРОСТЬ']
+  };
+  function startPhase(e, n) {
+    e.phase = n; e.trans = 1.4; e.spd *= 1.2;
+    const p = G.p, d = Math.hypot(p.x - e.x, p.y - e.y) || 1;
+    if (d < 70) { p.x += (p.x - e.x) / d * 30; p.y += (p.y - e.y) / d * 30; pushOut(p); hurt(6, 'РЁВ'); }
+    G.ebullets = G.ebullets.filter(b => Math.hypot(b.x - e.x, b.y - e.y) > 80);
+    G.shake = 10;
+    G.parts.push({ x: e.x, y: bodyY(e), vx: 0, vy: 0, life: .5, max: .5, color: n === 2 ? P.red : P.vest, size: 90, ring: true });
+    burst(e.x, bodyY(e), SPLAT[e.type] || [P.pink], 40, 90, 2);
+    banner(TYPES[e.type].boss, `ФАЗА ${n + 1}: ${PHASE_NAMES[e.type][n]}`, 2.2, n === 2 ? P.red : P.vest);
+    Snd.play('roar');
+    if (e.type === 'mama' && n === 2) {
+      for (let i = 0; i < 2; i++) {
+        const keep = G.boss, dc = makeEnemy('mama', clamp(e.x + (i ? 80 : -80), 30, WW - 30), e.y, false);
+        G.boss = keep; dc.decoy = true; dc.hp = dc.max = 40; dc.phase = 2; dc.vol = 1 + i;
+        G.enemies.push(dc);
+      }
+      say(e.x, e.y - 60, 'ГАЛЛЮЦИНАЦИИ', P.purple, true);
+    }
+    if (e.type === 'ouro' && n === 2 && e.segs) {
+      for (const sg of e.segs) if (!sg.dead) { sg.free = true; sg.noSep = false; sg.cd = Math.random() * 2; }
+      say(e.x, e.y - 40, 'ХВОСТ РАЗБЕЖАЛСЯ', P.purple, true);
+    }
+  }
   function spawnOuroSegments(head) {
     let prev = head;
     head.segs = [];
@@ -1737,6 +1789,7 @@
     if (e.disguised) { e.disguised = false; say(e.x, e.y - 20, 'SUS!', P.red, true); Snd.play('sus'); }
     if (e.type === 'ouro' && e.segs && e.segs.some(sg => !sg.dead)) { dmg *= .25; if (Math.random() < .04) say(e.x, e.y - 30, 'сначала хвост', P.purple); }
     if (e.air) return;
+    if (e.trans > 0) { if (Math.random() < .1) { Snd.play('ting', .1); say(e.x, e.y - 50, 'НЕУЯЗВИМ', P.white); } return; }
     if (e.type === 'sigma' && dmg < 3 && !noCrit) { dmg *= .2; if (Math.random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
     if (e.type === 'capy' && Math.random() < .06) say(e.x, e.y - 22, pick(['ок', 'ок я подъезжаю', 'спокойно']), P.capy);
     let d = dmg;
@@ -1801,7 +1854,8 @@
   function killEnemy(e, peaceful) {
     if (e.dead) return;
     e.dead = true;
-    const T = TYPES[e.type], boss = !!T.boss, spr = sprOf(e), sc = scaleOf(e);
+    const T = TYPES[e.type], boss = !!T.boss && !e.decoy, spr = sprOf(e), sc = scaleOf(e);
+    if (e.decoy) say(e.x, e.y - 40, 'ГАЛЛЮЦИНАЦИЯ', P.purple);
     const gain = e.score * G.mods.likes * (peaceful ? 2 : 1);
     G.kills++; G.score += R(gain); G.xp += gain;
     G.p.ult = Math.min(100, G.p.ult + (boss ? 40 : 1.6) / G.mods.cd);
@@ -1826,6 +1880,7 @@
     if (boss) {
       G.boss = null; Snd.bossMode(false);
       if (e.type === 'skuf') later(2, victory);
+      if (e.type === 'mama') for (const dd of G.enemies) if (dd.decoy && !dd.dead) killEnemy(dd);
       G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y + 12, 'gun'), mkPickup(e.x, e.y - 12, 'hp'));
       banner('БОСС ПОВЕРЖЕН', pick(['I’m sorry, I can’t continue', 'модель снята с продакшена', 'ошибка 500: босс не найден']), 2.4, P.gold);
       G.shake = 10;
@@ -2068,14 +2123,15 @@
     for (const z of G.zones) {
       z.t -= dt;
       const inside = Math.hypot(p.x - z.x, (p.y - z.y) * 1.6) < z.r;
-      if (z.kind === 'roots' || z.kind === 'foam') { if (inside && p.dashT <= 0) p.rooted = z.kind; }
+      if (z.kind === 'fire') { if (inside && p.dashT <= 0) { p.hp -= 14 * dt; if (Math.random() < dt * 2) say(p.x, p.y - 22, 'ГОРЯЧО', P.vest); checkDeath(); } }
+      else if (z.kind === 'roots' || z.kind === 'foam') { if (inside && p.dashT <= 0) p.rooted = z.kind; }
       else if (inside) p.hp = Math.min(m.maxHp, p.hp + 6 * m.heal * dt);
     }
     G.zones = G.zones.filter(z => z.t > 0);
     for (const pd of G.puddles) {
       pd.t -= dt;
       if (Math.hypot(p.x - pd.x, (p.y - pd.y) * 1.6) < pd.r && p.dashT <= 0) {
-        p.hp -= 10 * dt; if (((G.t * 4) | 0) !== ((G.t * 4 - dt * 4) | 0)) say(p.x, p.y - 22, 'вирусно', P.green);
+        p.hp -= 10 * dt; if (((G.t * 4) | 0) !== ((G.t * 4 - dt * 4) | 0)) say(p.x, p.y - 22, { holy: 'святая вода', sewage: 'фу' }[pd.col] || 'вирусно', pd.col === 'holy' ? P.gold : P.green);
         checkDeath();
       }
     }
@@ -2169,6 +2225,20 @@
         e.kx *= Math.pow(.02, dt); e.ky *= Math.pow(.02, dt);
         if (e.charm <= 0) say(e.x, e.y - 24, 'контекст сброшен', P.purple);
         continue;
+      }
+      const TT = TYPES[e.type];
+      if (TT.boss && !e.decoy) {
+        const th = TT.phases || [.66, .33], fr = bossFrac(e);
+        let ph = 0; for (const t of th) if (fr <= t) ph++;
+        if (ph > (e.phase || 0)) startPhase(e, (e.phase || 0) + 1);
+        if (e.trans > 0) {
+          e.trans -= dt; e.flash = ((G.t * 16) | 0) % 2 ? .05 : 0;
+          if (Math.random() < .5) G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) + rnd(e.hr), vx: rnd(40), vy: -30, life: .5, max: .5, color: pick(SPLAT[e.type] || [P.pink]), size: 2 });
+          continue;
+        }
+        const sc = scaleOf(e);
+        if ((e.phase || 0) >= 1 && Math.random() < dt * 8) G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) - e.hr * .5, vx: rnd(6), vy: -16, life: .9, max: .9, color: pick(['#6f6780', '#4a4458', '#8a82a0']), size: sc });
+        if ((e.phase || 0) >= 2 && Math.random() < dt * 14) G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) + rnd(e.hr * .6), vx: rnd(8), vy: -26, life: .45, max: .45, color: pick([P.red, P.vest, P.gold]), size: sc });
       }
       if (e.type !== 'ballerina' || !(e.spin > 0)) e.face = dx < 0 ? -1 : 1;
       let slow = e.slowT > 0 ? .5 : 1;
@@ -2366,7 +2436,7 @@
             break;
           }
           if (e.couch && e.couch.dead && !e.enraged) { e.enraged = true; e.couch = null; e.spd *= 1.8; banner('ТЫ СЛОМАЛ МОЙ ДИВАН', 'скуф в ярости', 1.8, P.red); Snd.play('skuf'); }
-          if (!e.couchUsed && hpk < .4) {
+          if (!e.couchUsed && (e.phase || 0) >= 2) {
             e.couchUsed = true;
             const cx = clamp(e.x - 10, 24, WW - 44), cy = clamp(e.y - 30, 30, WH - 40);
             const c = { kind: 'couch', x: cx, y: cy, w: PROPDEF.couch.w, h: PROPDEF.couch.h, hp: PROPDEF.couch.hp * (1 + G.wave / 35), max: 0, seed: 0, flash: 0 };
@@ -2377,7 +2447,7 @@
           if (e.state === 'wind') { vx = vy = 0; e.st -= dt; e.cdx = dx / d; e.cdy = dy / d; if (e.st <= 0) { e.state = 'charge'; e.st = .6; } break; }
           if (e.state === 'charge') { vx = e.cdx * 240; vy = e.cdy * 240; e.st -= dt; if (e.st <= 0) { e.state = 'walk'; e.cd = 1.2; skufGrain(e); } break; }
           if (e.cd <= 0 && d < 260) {
-            const phase = e.enraged ? 3 : hpk > .7 ? 1 : 2;
+            const phase = e.enraged ? 3 : (e.phase || 0) + 1;
             if (phase === 1) { e.cd = 2.2; if (Math.random() < .55) skufGrain(e); else skufBottle(e); }
             else if (phase === 2) { e.cd = 1.7; skufMirror(e); }
             else { e.cd = 1.4; if (Math.random() < .5) { e.state = 'wind'; e.st = .5; say(e.x, e.y - 70, 'ПУЗОМ!', P.red, true); Snd.play('charge'); } else skufGrain(e); }
@@ -2406,15 +2476,17 @@
             const k = 1 - Math.max(0, e.st) / e.lmax;
             e.x = e.lx0 + (e.ltx - e.lx0) * k; e.y = e.ly0 + (e.lty - e.ly0) * k; e.z = Math.sin(k * Math.PI) * (boss ? 40 : 22);
             if (e.st <= 0) {
-              e.state = 'walk'; e.z = 0; e.cd = boss ? (e.hp < e.max * .5 ? 1.2 : 1.8) : 2.8;
+              e.state = 'walk'; e.z = 0; e.cd = boss ? [1.8, 1.4, 1.1][e.phase || 0] : 2.8;
               const R0 = boss ? 48 : 24;
               G.parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: .3, max: .3, color: P.floppa, size: R0, ring: true });
               G.shake = Math.max(G.shake, boss ? 7 : 3); Snd.play('stomp', .05);
               if (Math.hypot(p.x - e.x, p.y - e.y) < R0) hurt(e.dmg, 'ШЛЁП');
               for (const pr of PROPS.slice()) if (Math.hypot(pr.x + pr.w / 2 - e.x, pr.y + pr.h / 2 - e.y) < R0) damageProp(pr, boss ? 12 : 4);
               if (boss) {
-                const n = e.hp < e.max * .5 ? 14 : 10, off = Math.random() * TAU;
-                for (let i = 0; i < n; i++) { const a = off + i / n * TAU; G.ebullets.push({ x: e.x, y: e.y - 10, vx: Math.cos(a) * 75, vy: Math.sin(a) * 75, life: 3, dmg: 10, kind: 'fur', r: 3, t: 0 }); }
+                const ph = e.phase || 0, n = [10, 14, 16][ph], off = Math.random() * TAU;
+                for (const sp of ph >= 2 ? [60, 90, 120] : [75]) for (let i = 0; i < n; i++) { const a = off + (i + (sp === 90 ? .5 : 0)) / n * TAU; G.ebullets.push({ x: e.x, y: e.y - 10, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 3, dmg: 10, kind: 'fur', r: 3, t: 0 }); }
+                e.chain = (e.chain || 0) + 1;
+                if (e.chain <= ph) { e.state = 'crouch'; e.st = .25; } else e.chain = 0;
                 if ((e.leaps = (e.leaps || 0) + 1) % 3 === 0) for (let i = 0; i < 2; i++) { const sp = spawnPoint(50, { x: e.x, y: e.y, r: 60 }); spawnPortal('floppa', sp.x, sp.y, .7, false); }
                 say(e.x, e.y - 60, pick(['ШЛЁП', 'ПОЛНЫЙ ШЛЁП', 'шлёпа не одобряет']), P.floppa, true);
               }
@@ -2423,20 +2495,28 @@
           break;
         }
         case 'skboss': {
+          const ph = e.phase || 0;
+          if (ph >= 2) {
+            e.sw = (e.sw || 0) - dt;
+            if (e.sw <= 0) { e.sw = .4; G.puddles.push({ x: e.x + rnd(6), y: e.y + rnd(4), r: 10, t: 5, col: 'sewage' }); }
+            e.spT = (e.spT || 0) - dt;
+            if (e.spT <= 0) { e.spT = .1; e.sa = (e.sa || 0) + .45; G.ebullets.push({ x: e.x, y: e.y - 20, vx: Math.cos(e.sa) * 80, vy: Math.sin(e.sa) * 80, life: 3, dmg: 7, kind: 'drop', r: 3, t: 0 }); }
+          }
           if (e.flush > 0) {
             e.flush -= dt; vx = vy = 0;
-            p.x -= dx / d * 58 * dt; p.y -= dy / d * 58 * dt;
+            const pull = [58, 75, 95][ph];
+            p.x -= dx / d * pull * dt; p.y -= dy / d * pull * dt;
             for (let i = 0; i < 2; i++) {
               const a = G.t * 6 + i * Math.PI + Math.random(), r = 20 + Math.random() * 90;
               G.parts.push({ x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r * .6, vx: -Math.sin(a) * 60 - Math.cos(a) * 40, vy: Math.cos(a) * 40 - Math.sin(a) * 30, life: .4, max: .4, color: pick([P.cyan, P.white, P.cyanD]), size: 1 });
             }
             e.ring = (e.ring || 0) - dt;
-            if (e.ring <= 0) { e.ring = .45; const n = 10, off = Math.random() * TAU; for (let i = 0; i < n; i++) { const a = off + i / n * TAU; G.ebullets.push({ x: e.x, y: e.y - 20, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 3, dmg: 9, kind: 'drop', r: 3, t: 0 }); } }
+            if (e.ring <= 0) { e.ring = [.45, .35, .25][ph]; const n = 10 + ph * 2, off = Math.random() * TAU; for (let i = 0; i < n; i++) { const a = off + i / n * TAU; G.ebullets.push({ x: e.x, y: e.y - 20, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 3, dmg: 9, kind: 'drop', r: 3, t: 0 }); } }
             if (d < 24) hurt(e.dmg, 'СМЫТ');
           } else {
             e.spec = (e.spec == null ? 5 : e.spec) - dt;
-            if (e.spec <= 0) { e.spec = e.hp < e.max * .5 ? 5 : 7; e.flush = 2.2; say(e.x, e.y - 60, 'СМЫВ!', P.cyan, true); Snd.play('flush'); }
-            if (e.cd <= 0) { e.cd = 4; for (let i = 0; i < 3 + (e.hp < e.max * .5 ? 2 : 0); i++) { const sp = spawnPoint(40, { x: e.x, y: e.y, r: 70 }); spawnPortal('skibidi', sp.x, sp.y, .6, false); } }
+            if (e.spec <= 0) { e.spec = [7, 5, 3.8][ph]; e.flush = 2.2 + ph * .4; say(e.x, e.y - 60, ph >= 2 ? 'ЗАСОР! СМЫВ!' : 'СМЫВ!', P.cyan, true); Snd.play('flush'); }
+            if (e.cd <= 0) { e.cd = 4; for (let i = 0; i < 3 + ph * 2; i++) { const sp = spawnPoint(40, { x: e.x, y: e.y, r: 70 }); spawnPortal('skibidi', sp.x, sp.y, .6, ph >= 1 && i === 0); } }
             vx += -dy / d * Math.sin(e.t * 3) * 30; vy += dx / d * Math.sin(e.t * 3) * 30;
           }
           if (Math.random() < dt * .5) Snd.play('skibidi', .5);
@@ -2447,16 +2527,25 @@
           e.orbit += dt * (alive ? .7 : 1.1);
           const lunge = Math.sin(e.t * .9) > .85, R1 = lunge ? 10 : 95;
           const tx = p.x + Math.cos(e.orbit) * R1, ty = p.y + Math.sin(e.orbit) * R1 * .7, tdx = tx - e.x, tdy = ty - e.y, td = Math.hypot(tdx, tdy) || 1;
-          const sp2 = spd * (alive ? 1.2 : 1.8) * (lunge ? 1.4 : 1);
+          const ph = e.phase || 0, sp2 = spd * (alive ? 1.2 : 1.8) * (lunge ? 1.4 : 1);
           vx = tdx / td * sp2; vy = tdy / td * sp2; e.face = vx < 0 ? -1 : 1;
           if (e.cd <= 0) {
-            e.cd = alive ? 2.6 : 1.4;
-            const a0 = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x);
-            [...'DELVE'].forEach((ch, i) => { const aa = a0 + (i - 2) * .2; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(aa) * 75, vy: Math.sin(aa) * 75, life: 4, dmg: 10, kind: 'letter', ch, r: 3, t: 0 }); });
+            e.cd = (alive ? 2.6 : 1.4) * [1, .8, .65][ph];
+            const volley = () => { if (e.dead) return; const a0 = Math.atan2(G.p.y - 9 - bodyY(e), G.p.x - e.x); [...'DELVE'].forEach((ch, i) => { const aa = a0 + (i - 2) * .2; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(aa) * 75, vy: Math.sin(aa) * 75, life: 4, dmg: 10, kind: 'letter', ch, r: 3, t: 0, home: ph >= 2 }); }); };
+            volley(); if (ph >= 1) later(.35, volley);
+          }
+          if (ph >= 2) {
+            e.spT = (e.spT || 0) - dt;
+            if (e.spT <= 0) { e.spT = .22; e.sa = (e.sa || 0) + .5; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(e.sa) * 65, vy: Math.sin(e.sa) * 65, life: 3.5, dmg: 8, kind: 'letter', ch: 'DELVE'[((e.sa * 2) | 0) % 5], r: 3, t: 0 }); }
           }
           break;
         }
         case 'oseg': {
+          if (e.free) {
+            e.face = dx < 0 ? -1 : 1; vx = dx / d * 50; vy = dy / d * 50;
+            if (e.cd <= 0) { e.cd = 2 + Math.random() * 2; const a = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x); G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 75, vy: Math.sin(a) * 75, life: 3.5, dmg: 8, kind: 'amen', r: 3, t: 0 }); }
+            break;
+          }
           let L = e.leader; while (L && L.dead) L = L.leader; e.leader = L;
           vx = vy = 0;
           if (L) {
@@ -2464,42 +2553,65 @@
             if (ld > 11) { e.x += lx0 / ld * (ld - 11); e.y += ly0 / ld * (ld - 11); }
             e.face = lx0 < 0 ? -1 : 1;
           }
-          if (e.cd <= 0) { e.cd = 3 + Math.random() * 4; const a = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x); G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 65, vy: Math.sin(a) * 65, life: 3.5, dmg: 8, kind: 'amen', r: 3, t: 0 }); }
+          if (e.cd <= 0) { e.cd = (e.head && e.head.phase >= 1 ? 1.8 : 3) + Math.random() * 3; const a = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x); G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 65, vy: Math.sin(a) * 65, life: 3.5, dmg: 8, kind: 'amen', r: 3, t: 0 }); }
           break;
         }
-        case 'jesus': case 'jboss':
+        case 'jesus': case 'jboss': {
+          const ph = e.phase || 0;
+          if (e.type === 'jboss') {
+            if (ph >= 1) {
+              e.dashCd = (e.dashCd == null ? 4 : e.dashCd) - dt;
+              if (e.dashCd <= 0 && !(e.dashT > 0)) { e.dashT = .8; e.dx0 = dx / d; e.dy0 = dy / d; e.dashCd = ph >= 2 ? 4.5 : 6.5; say(e.x, e.y - 70, 'ХОЖУ ПО ВОДЕ', P.cyan, true); Snd.play('charge'); }
+            }
+            if (e.dashT > 0) {
+              e.dashT -= dt; vx = e.dx0 * 150; vy = e.dy0 * 150;
+              if (Math.random() < .5) G.puddles.push({ x: e.x + rnd(6), y: e.y + rnd(4), r: 9, t: 3.5, col: 'holy' });
+            }
+            if (ph >= 2) {
+              e.spT = (e.spT || 0) - dt;
+              if (e.spT <= 0) { e.spT = .14; e.sa = (e.sa || 0) + .33; for (const k of [0, Math.PI]) G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(e.sa + k) * 70, vy: Math.sin(e.sa + k) * 70, life: 3.5, dmg: 9, kind: 'amen', r: 3, t: 0 }); }
+            }
+          }
           if (e.cd <= 0) {
             const boss = e.type === 'jboss';
-            e.cd = boss ? 2.2 : 3;
+            e.cd = boss ? [2.2, 1.9, 1.7][ph] : 3;
             const n = boss ? 14 : 8, off = Math.random() * TAU, sy = bodyY(e);
             for (let i = 0; i < n; i++) { const a = off + i / n * TAU; G.ebullets.push({ x: e.x, y: sy, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, life: 3.5, dmg: boss ? 12 : 8, kind: 'amen', r: 3, t: 0 }); }
+            if (boss && ph >= 1) later(.3, () => { if (e.dead) return; for (let i = 0; i < n; i++) { const a = off + (i + .5) / n * TAU; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 75, vy: Math.sin(a) * 75, life: 3.5, dmg: 12, kind: 'amen', r: 3, t: 0 }); } });
             for (const o of es) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 70) { o.hp = Math.min(o.max, o.hp + o.max * .35); say(o.x, o.y - o.hy * 2 - 4, '+благословение', P.gold); }
             G.parts.push({ x: e.x, y: sy, vx: 0, vy: 0, life: .5, max: .5, color: P.gold, size: 70, ring: true });
             Snd.play('amen', .2);
             if (boss) for (let i = 0; i < 3 + (G.wave / 5 | 0); i++) spawnPortal('hand', clamp(e.x + rnd(50), 20, WW - 20), clamp(e.y + rnd(50), 24, WH - 20), .6, false);
           }
           break;
+        }
         case 'mama': {
           if (d < 120) { vx = -vx * .5; vy = -vy * .5; }
-          const phase2 = e.hp < e.max * .5;
-          if (!e.prompt && e.cd <= 0) { e.prompt = { ...pick(MAMA_PROMPTS), t: 0, dur: 1.6 }; e.cd = phase2 ? 3.4 : 4.5; }
+          const ph = e.phase || 0, phase2 = ph >= 1;
+          if (e.decoy) {
+            vx += Math.sin(e.t * 2 + e.x) * 20;
+            e.vol = (e.vol || 2) - dt;
+            if (e.vol <= 0) { e.vol = 2.4; const a0 = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x); [...'DELVE'].forEach((ch, i) => { const a = a0 + (i - 2) * .2; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, life: 4, dmg: 7, kind: 'letter', ch, r: 3, t: 0 }); }); }
+            break;
+          }
+          if (!e.prompt && e.cd <= 0) { e.prompt = { ...pick(MAMA_PROMPTS), t: 0, dur: ph >= 2 ? 1.1 : 1.6 }; e.cd = [4.5, 3.4, 2.6][ph]; }
           if (e.prompt) {
             e.prompt.t += dt; if (Math.random() < .5) Snd.play('type', .05);
             if (e.prompt.t >= e.prompt.dur) {
-              for (let i = 0; i < e.prompt.n + (phase2 ? 1 : 0); i++) { const sp = spawnPoint(40, { x: e.x, y: e.y, r: 60 }); spawnPortal(e.prompt.type, sp.x, sp.y, .7, false); }
+              for (let i = 0; i < e.prompt.n + ph; i++) { const sp = spawnPoint(40, { x: e.x, y: e.y, r: 60 }); spawnPortal(e.prompt.type, sp.x, sp.y, .7, ph >= 2 && i === 0); }
               e.prompt = null;
             }
           }
           e.vol = (e.vol || 2) - dt;
           if (e.vol <= 0) {
-            e.vol = phase2 ? 1.6 : 2.2;
+            e.vol = [2.2, 1.6, 1.3][ph];
             const a0 = Math.atan2(p.y - 9 - bodyY(e), p.x - e.x);
-            [...'DELVE'].forEach((ch, i) => { const a = a0 + (i - 2) * .18; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 4, dmg: 10, kind: 'letter', ch, r: 3, t: 0 }); });
+            [...'DELVE'].forEach((ch, i) => { const a = a0 + (i - 2) * .18; G.ebullets.push({ x: e.x, y: bodyY(e), vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 4, dmg: 10, kind: 'letter', ch, r: 3, t: 0, home: ph >= 2 }); });
           }
           if (phase2) {
             e.spec = (e.spec || 6) - dt;
             if (e.spec <= 0) {
-              e.spec = 9;
+              e.spec = ph >= 2 ? 6.5 : 9;
               if ((e.specN = (e.specN || 0) + 1) % 2) { p.invert = 3; banner('TEMPERATURE = 2.0', 'управление перепуталось', 1.6, P.pink); }
               else { p.noGun = 3.5; banner('NEGATIVE PROMPT: NO GUNS', 'только Макаров', 1.6, P.pink); }
               Snd.play('blink');
@@ -2508,13 +2620,26 @@
           break;
         }
         case 'cboss': {
-          e.orbit += dt * .45;
-          const tx = p.x + Math.cos(e.orbit) * 110, ty = p.y + Math.sin(e.orbit) * 70, tdx = tx - e.x, tdy = ty - e.y, td = Math.hypot(tdx, tdy) || 1;
-          vx = tdx / td * spd * 1.4; vy = tdy / td * spd * 1.4; e.face = vx < 0 ? -1 : 1;
-          if (e.cd <= 0) {
-            e.cd = e.hp < e.max * .5 ? 2.2 : 3;
-            const a = Math.random() * TAU, nx = -Math.sin(a), ny = Math.cos(a);
-            for (let i = -3; i <= 3; i++) dropBomb(p.x + nx * i * 16, p.y + ny * i * 12, e.alt, 16, 20);
+          const ph = e.phase || 0;
+          if (e.dive > 0) {
+            e.dive -= dt; vx = e.ddx * 170; vy = e.ddy * 170; e.alt = 12; e.face = vx < 0 ? -1 : 1;
+            e.bt = (e.bt || 0) - dt;
+            if (e.bt <= 0) { e.bt = .15; dropBomb(e.x, e.y, 12, 10, 14); }
+            if (e.dive <= 0) { e.alt = 30; e.diveCd = ph >= 2 ? 4.5 : 6.5; }
+          } else {
+            e.orbit += dt * [.45, .55, .7][ph];
+            const tx = p.x + Math.cos(e.orbit) * 110, ty = p.y + Math.sin(e.orbit) * 70, tdx = tx - e.x, tdy = ty - e.y, td = Math.hypot(tdx, tdy) || 1;
+            vx = tdx / td * spd * 1.4; vy = tdy / td * spd * 1.4; e.face = vx < 0 ? -1 : 1;
+            if (ph >= 1) {
+              e.diveCd = (e.diveCd == null ? 2 : e.diveCd) - dt;
+              if (e.diveCd <= 0) { e.dive = 1.3; e.ddx = dx / d; e.ddy = dy / d; say(e.x, e.y - 50, 'ПИКИРУЮ', P.red, true); Snd.play('whistle'); }
+            }
+          }
+          if (ph >= 2) { e.ft = (e.ft || 0) - dt; if (e.ft <= 0) { e.ft = .3; G.zones.push({ x: e.x, y: e.y, r: 12, t: 3, max: 3, kind: 'fire' }); } }
+          if (e.cd <= 0 && !(e.dive > 0)) {
+            e.cd = [3, 2.5, 2.1][ph];
+            if (ph >= 2 && (e.cn = (e.cn || 0) + 1) % 2) { for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; dropBomb(p.x + Math.cos(a) * 40, p.y + Math.sin(a) * 28, e.alt, 16, 18); } }
+            else { const a = Math.random() * TAU, nx = -Math.sin(a), ny = Math.cos(a); for (let i = -3; i <= 3; i++) dropBomb(p.x + nx * i * 16, p.y + ny * i * 12, e.alt, 16, 20); }
           }
           e.spec = (e.spec || 8) - dt;
           if (e.spec <= 0) { e.spec = 9; for (let i = 0; i < 2; i++) { const sp = spawnPoint(80); spawnPortal('croc', sp.x, sp.y, .8, false); } }
@@ -2675,6 +2800,11 @@
         }
         continue;
       }
+      if (b.home) {
+        const want = Math.atan2(p.y - 9 - b.y, p.x - b.x), cur = Math.atan2(b.vy, b.vx), spd0 = Math.hypot(b.vx, b.vy);
+        const na = cur + clamp(((want - cur + Math.PI * 3) % TAU) - Math.PI, -1.3 * dt, 1.3 * dt);
+        b.vx = Math.cos(na) * spd0; b.vy = Math.sin(na) * spd0;
+      }
       if (b.kind === 'eslipper') {
         const want = Math.atan2(p.y - 9 - b.y, p.x - b.x), cur = Math.atan2(b.vy, b.vx);
         const na = cur + clamp(((want - cur + Math.PI * 3) % TAU) - Math.PI, -2.6 * dt, 2.6 * dt);
@@ -2713,7 +2843,7 @@
   // ======================= render (low-res) =======================
   function blit(spr, frame, x, y, face, o = {}) {
     const sc = o.scale || 1;
-    const img = o.color ? tint(spr, frame, o.color) : spr.frames[frame];
+    const img = o.color ? tint(spr, frame, o.color) : o.dmg ? damaged(spr, frame, o.dmg) : spr.frames[frame];
     lx.save();
     lx.translate(R(x), R(y));
     if (face < 0) lx.scale(-1, 1);
@@ -2779,8 +2909,11 @@
     if (!e.alt) drawShadow(e.x, e.y, R(e.r * 1.1) + 1);
     for (const tr of e.trail) blit(spr, tr.f, tr.x, tr.y, tr.face, { color: P.vest, alpha: tr.t * 2.5, scale: sc });
     if (e.type === 'jesus' || e.type === 'jboss') blit(SPR.halo, ((e.t * 3) | 0) % 2, e.x + e.face * sc, y - 31 * sc, 1, { scale: sc });
-    const outline = e.charm > 0 ? P.purple : e.elite ? AFFIX[e.aff].color : TYPES[e.type].boss || e.type === 'oseg' ? P.gold : null;
-    blit(spr, f, e.x, y, e.type === 'sixseven' || e.skin === 'sixseven' ? 1 : e.face, { color: e.flash > 0 ? '#ffffff' : e.stun > 0 && ((G.t * 8) | 0) % 2 ? P.cyan : null, outline, scale: sc, alpha: e.type === 'troll' ? e.vis : null });
+    const isBoss = TYPES[e.type].boss && !e.decoy, bph = isBoss ? e.phase || 0 : e.type === 'oseg' && e.head ? e.head.phase || 0 : 0;
+    const outline = e.charm > 0 ? P.purple : e.elite ? AFFIX[e.aff].color : isBoss || e.type === 'oseg' ? [P.gold, P.vest, P.red][bph] : e.decoy ? P.purple : null;
+    const alpha = e.type === 'troll' ? e.vis : e.decoy ? .45 + .25 * Math.sin(e.t * 9) : null;
+    const jx = e.trans > 0 ? R(rnd(2)) : 0;
+    blit(spr, f, e.x + jx, y, e.type === 'sixseven' || e.skin === 'sixseven' ? 1 : e.face, { color: e.flash > 0 ? (e.trans > 0 ? P.red : '#ffffff') : e.stun > 0 && ((G.t * 8) | 0) % 2 ? P.cyan : null, outline, scale: sc, alpha, dmg: bph });
     if (e.type === 'lirili') { lx.fillStyle = P.white; for (let i = 0; i < 12; i++) { const a = -G.t * .8 + i / 12 * TAU; if (i % 3 === 0) lx.fillRect(R(e.x + Math.cos(a) * 75), R(e.y + Math.sin(a) * 45), 1, 1); } }
     if (e.shield > 0) {
       lx.fillStyle = 'rgba(255,248,236,.5)';
@@ -2833,6 +2966,11 @@
     labels.length = 0;
 
     for (const z of G.zones) {
+      if (z.kind === 'fire') {
+        lx.globalAlpha = Math.min(1, z.t);
+        for (let i = 0; i < 14; i++) { const ang = i * 2.4, rr = (i % 5) / 5 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6, h = 1 + (((G.t * 12 + i) | 0) % 3); lx.fillStyle = [P.red, P.vest, P.gold][(i + ((G.t * 8) | 0)) % 3]; lx.fillRect(R(x), R(y) - h, 1, h); }
+        lx.globalAlpha = 1; continue;
+      }
       if (z.kind === 'foam') {
         lx.globalAlpha = Math.min(1, z.t) * .85;
         for (let i = 0; i < 30; i++) { const ang = i * 2.4, rr = (i % 6) / 6 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6; lx.fillStyle = i % 3 ? P.white : P.gold; lx.fillRect(R(x), R(y) - (((G.t * 3 + i) | 0) % 2), 1 + (i % 2), 1); }
@@ -2855,9 +2993,10 @@
       lx.globalAlpha = 1;
     }
     for (const pd of G.puddles) {
-      lx.globalAlpha = Math.min(1, pd.t) * .7; lx.fillStyle = P.greenD;
+      const pc = { holy: [P.goldD, P.white], sewage: ['#5a3d1a', '#9a7a3c'] }[pd.col] || [P.greenD, P.greenL];
+      lx.globalAlpha = Math.min(1, pd.t) * .7; lx.fillStyle = pc[0];
       lx.fillRect(R(pd.x - pd.r), R(pd.y - 2), pd.r * 2, 4); lx.fillRect(R(pd.x - pd.r + 2), R(pd.y - 3), pd.r * 2 - 4, 6);
-      lx.fillStyle = P.greenL; lx.fillRect(R(pd.x - 2), R(pd.y - 1), 1, 1);
+      lx.fillStyle = pc[1]; lx.fillRect(R(pd.x - 2), R(pd.y - 1), 1, 1);
       lx.globalAlpha = 1;
     }
     for (const pl of G.peels) if (pl.t > 2 || ((pl.t * 8) | 0) % 2) blit(SPR.peel, 0, pl.x, pl.y, 1);
@@ -3127,11 +3266,13 @@
     }
     // boss bar
     if (G.boss && !G.boss.dead) {
-      const b = G.boss, bossHp = b.hp + (b.segs ? b.segs.reduce((a, sg) => a + (sg.dead ? 0 : Math.max(0, sg.hp)), 0) : 0), bossMax = b.max + (b.segMax || 0), w = Math.min(460, W - pad * 2), x = (W - w) / 2, y = narrow ? H - pad - 20 - 130 : pad + 56;
-      txt(b.bossName, W / 2, y - 16, P.pink, 8, 'center');
+      const b = G.boss, fr = Math.max(0, bossFrac(b)), bph = b.phase || 0, th = TYPES[b.type].phases || [.66, .33], w = Math.min(460, W - pad * 2), x = (W - w) / 2, y = narrow ? H - pad - 20 - 130 : pad + 56;
+      txt(`${b.bossName} · ${PHASE_NAMES[b.type][bph]}`, W / 2, y - 16, [P.pink, P.vest, P.red][bph], 8, 'center');
       ctx.fillStyle = P.ink; ctx.fillRect(x - 2, y - 2, w + 4, 14);
       ctx.fillStyle = '#3a3148'; ctx.fillRect(x, y, w, 10);
-      ctx.fillStyle = P.pink; ctx.fillRect(x, y, w * Math.max(0, bossHp / bossMax), 10);
+      ctx.fillStyle = b.trans > 0 && ((G.t * 12) | 0) % 2 ? P.white : [P.pink, P.vest, P.red][bph]; ctx.fillRect(x, y, w * fr, 10);
+      for (const t of th) { ctx.fillStyle = P.ink; ctx.fillRect(R(x + w * t) - 1, y - 3, 3, 16); ctx.fillStyle = P.paper; ctx.fillRect(R(x + w * t), y - 3, 1, 16); }
+      if (b.trans > 0) txt('НЕУЯЗВИМ', W / 2, y + 14, P.white, 8, 'center');
     }
     // banner
     if (G.banner) {
