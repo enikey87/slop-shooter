@@ -13,6 +13,7 @@ import { xpNeed, WW, WH, type Enemy, type Prop } from './state';
 import type { WeaponId } from '../content/weapons';
 import { gunKill, gunLevel, offerWeapons, evolvable } from './inventory';
 import { comboKill, hitStop } from './juice';
+import { progress } from './guard';
 import { streamerBoom, gas } from './enemies/behaviors';
 
 export interface HitOpts {
@@ -46,7 +47,7 @@ export function hitEnemy(e: Enemy, dmg: number, kx = 0, ky = 0, o: HitOpts = {})
     if (e.shield <= 0) { e.shield = 0; say(e.x, bodyY(e) - 14, 'водяной знак снят', P.white); burst(e.x, bodyY(e), P.white, 16, 60); }
     return;
   }
-  e.hp -= d; e.flash = .07;
+  e.hp -= d; e.flash = .07; progress();
   const k = e.heavy ? .25 : 1; e.kx += kx * k; e.ky += ky * k;
   sfx('hit', .03);
   if (e.type === 'grandpa' && !e.saidMonster) { e.saidMonster = true; say(e.x, e.y - 30, 'ты монстр', P.pink); }

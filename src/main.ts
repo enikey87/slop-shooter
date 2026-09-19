@@ -31,7 +31,8 @@ setHooks({
   splat, rubble, enemyDied, heroDied,
   perksOpened: showPerks,
   gameOver: showGameOver,
-  victory: showVictory
+  victory: showVictory,
+  error: (err, where) => reportError(err, `tick:${where}`)
 });
 
 /** ?seed=123 в URL — воспроизводимый забег. */
@@ -79,13 +80,26 @@ function boot(): void {
   attractMode();
   startLoop({
     tick: dt => step(dt, readTick()),
-    frame: dt => { updateTouchbar(dt); draw(); }
+    frame: dt => { updateTouchbar(dt); draw(); },
+    onError: reportError
   });
 }
 
+/** Ошибка в тике или кадре: игра продолжается, отчёт — в консоль и window.__slopErrors (seed + время, чтобы воспроизвести). */
+const errors: { where: string; msg: string; seed: number; t: number; wave: number; n: number }[] = [];
+function reportError(err: unknown, where: string): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  const known = errors.find(e => e.msg === msg && e.where === where);
+  if (known) { known.n++; return; }
+  errors.push({ where, msg, seed: G.seed, t: +G.t.toFixed(2), wave: G.wave, n: 1 });
+  console.error(`[slop] ошибка в ${where}, игра продолжается. seed=${G.seed} t=${G.t.toFixed(2)} волна=${G.wave}`, err);
+  G.toast = { txt: '⚠ поймали ошибку — игра продолжается', t: 3 };
+}
+
 // Отладка и smoke-тесты из консоли браузера.
-declare global { interface Window { __slop: () => typeof G; __slopDebug: unknown } }
+declare global { interface Window { __slop: () => typeof G; __slopDebug: unknown; __slopErrors: typeof errors } }
 window.__slop = () => G;
+window.__slopErrors = errors;
 window.__slopDebug = {
   makeEnemy: (t: EnemyId, x: number, y: number, el: boolean) => addEnemy(t, x, y, el),
   giveGun: takeWeapon, lvl: (id: WeaponId, l: number) => { G.gunLvl[id].lvl = l; }, PROPS: () => G.props, spawnSeg: spawnOuroSegments, snd: () => Snd.debug,

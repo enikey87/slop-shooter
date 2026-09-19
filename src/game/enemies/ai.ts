@@ -16,6 +16,7 @@ import { BEHAVIORS } from './registry';
 import { SpatialHash } from './spatial';
 import type { Auras, Steer } from './types';
 import { WW, WH, type Enemy } from '../state';
+import { reportSimError } from '../world';
 
 const HIT_TEXT: Partial<Record<string, string>> = { sixseven: 'SIX SEVEN', shark: 'ТРАЛАЛЕРО!', troll: 'problem?', skibidi: 'скибиди!', amogus: 'SUS', capy: 'ок' };
 const RAMMERS = new Set(['shark', 'skuf', 'cboss']);
@@ -106,44 +107,53 @@ function affixes(e: Enemy, s: Steer): void {
   e.trail = e.trail.filter(tr => tr.t > 0);
 }
 
+/** Один враг за тик. */
+function updateOne(e: Enemy, dt: number, auras: Auras, mineLure: boolean): void {
+  const p = G.p;
+  if (e.dead) return;
+  e.t += dt; e.hitCd -= dt; e.cd -= dt; e.flash -= dt; e.atk -= dt; e.slowT -= dt;
+  if (e.vulnT) e.vulnT -= dt;
+  if (e.charmImmune) e.charmImmune -= dt;
+  if (e.burnDur && e.burnDur > 0) burn(e, dt);
+  if (e.dead) return;
+  const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  if (e.stun > 0) { e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt); return; }
+  if (e.charm > 0) { charmed(e, dt); return; }
+  if (isBoss(e) && !e.decoy && !bossTick(e, dt)) return;
+  // PRO-подписка лечится; голем и сигма на половине здоровья переходят во вторую фазу
+  const regen = TIERS[e.tier].regen;
+  if (regen && e.hp < e.max) e.hp = Math.min(e.max, e.hp + e.max * regen * dt);
+  if (!e.broken && e.hp < e.max / 2 && (e.type === 'golem' || e.type === 'sigma')) breakArmor(e);
+  if (e.type !== 'ballerina' || !(e.spin && e.spin > 0)) e.face = dx < 0 ? -1 : 1;
+  let slow = e.slowT > 0 ? .5 : 1;
+  if (e.calm > 0) { slow *= .5; e.calm -= dt; }
+  for (const z of G.zones) if ((!z.kind || z.kind === 'pfire' || z.kind === 'jpeg') && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) {
+    if (!z.kind) slow *= .4;
+    if (z.kind === 'jpeg') slow *= .5;
+    if (z.burn || z.kind === 'pfire') { e.burnT = (e.burnT ?? 0) - dt; if (e.burnT <= 0) { e.burnT = .25; hitEnemy(e, (z.kind === 'pfire' ? 3 : 2) * G.mods.dmg, 0, 0, { noCrit: true }); } }
+  }
+  const spd = e.spd * slow;
+  const s: Steer = { dt, dx, dy, d, spd, slow, vx: dx / d * spd, vy: dy / d * spd };
+  BEHAVIORS[e.type]?.(e, s, auras);
+  if (mineLure && !isBoss(e) && !e.alt) lure(e, s);
+  if (e.aff) affixes(e, s);
+
+  e.x += (s.vx + e.kx) * dt; e.y += (s.vy + e.ky) * dt;
+  decayKnock(e, dt);
+  if ((!e.alt || e.alt < 10) && e.dmg && !e.disguised && !(e.z > 6) && d < e.r + p.r + 1 && e.hitCd <= 0) {
+    e.hitCd = .6;
+    hurt(e.dmg * (e.elite ? 1.4 : 1) * (e.state === 'charge' ? 1.5 : 1), HIT_TEXT[e.type] ?? null);
+  }
+}
+
 export function updateEnemies(dt: number): void {
   const p = G.p;
   const auras: Auras = { guilt: false, timeSlow: false, wobble: false, mogged: false };
   const mineLure = G.mines.length > 0 && gunLevel('mines') >= 3;
   for (const e of G.enemies) {
     if (e.dead) continue;
-    e.t += dt; e.hitCd -= dt; e.cd -= dt; e.flash -= dt; e.atk -= dt; e.slowT -= dt;
-    if (e.vulnT) e.vulnT -= dt;
-    if (e.burnDur && e.burnDur > 0) burn(e, dt);
-    if (e.dead) continue;
-    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
-    if (e.stun > 0) { e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt); continue; }
-    if (e.charm > 0) { charmed(e, dt); continue; }
-    if (isBoss(e) && !e.decoy && !bossTick(e, dt)) continue;
-    // PRO-подписка лечится; голем и сигма на половине здоровья переходят во вторую фазу
-    const regen = TIERS[e.tier].regen;
-    if (regen && e.hp < e.max) e.hp = Math.min(e.max, e.hp + e.max * regen * dt);
-    if (!e.broken && e.hp < e.max / 2 && (e.type === 'golem' || e.type === 'sigma')) breakArmor(e);
-    if (e.type !== 'ballerina' || !(e.spin && e.spin > 0)) e.face = dx < 0 ? -1 : 1;
-    let slow = e.slowT > 0 ? .5 : 1;
-    if (e.calm > 0) { slow *= .5; e.calm -= dt; }
-    for (const z of G.zones) if ((!z.kind || z.kind === 'pfire' || z.kind === 'jpeg') && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) {
-      if (!z.kind) slow *= .4;
-      if (z.kind === 'jpeg') slow *= .5;
-      if (z.burn || z.kind === 'pfire') { e.burnT = (e.burnT ?? 0) - dt; if (e.burnT <= 0) { e.burnT = .25; hitEnemy(e, (z.kind === 'pfire' ? 3 : 2) * G.mods.dmg, 0, 0, { noCrit: true }); } }
-    }
-    const spd = e.spd * slow;
-    const s: Steer = { dt, dx, dy, d, spd, slow, vx: dx / d * spd, vy: dy / d * spd };
-    BEHAVIORS[e.type]?.(e, s, auras);
-    if (mineLure && !isBoss(e) && !e.alt) lure(e, s);
-    if (e.aff) affixes(e, s);
-
-    e.x += (s.vx + e.kx) * dt; e.y += (s.vy + e.ky) * dt;
-    decayKnock(e, dt);
-    if ((!e.alt || e.alt < 10) && e.dmg && !e.disguised && !(e.z > 6) && d < e.r + p.r + 1 && e.hitCd <= 0) {
-      e.hitCd = .6;
-      hurt(e.dmg * (e.elite ? 1.4 : 1) * (e.state === 'charge' ? 1.5 : 1), HIT_TEXT[e.type] ?? null);
-    }
+    // сломанный враг не должен останавливать остальную игру: удаляем его и сообщаем
+    try { updateOne(e, dt, auras, mineLure); } catch (err) { e.dead = true; reportSimError(err, `враг ${e.type}`); }
   }
   p.guilt = auras.guilt; p.timeSlow = auras.timeSlow; p.wobble = auras.wobble; p.mogged = auras.mogged;
   separate();

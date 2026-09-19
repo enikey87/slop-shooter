@@ -287,8 +287,9 @@ function drawActors(): void {
   if (G.state !== 'dead' && G.state !== 'attract') list.push({ y: G.p.y, draw: () => drawPlayer(G.p) });
   for (const al of G.allies) list.push({ y: al.y, draw: () => drawAlly(al) });
   list.sort((a, b) => a.y - b.y);
-  for (const it of list) it.draw();
-  for (const e of G.enemies) if (e.alt) drawEnemy(e);
+  // сломанная сущность не должна гасить весь кадр: пропускаем её
+  for (const it of list) { try { it.draw(); } catch { /* пропуск */ } }
+  for (const e of G.enemies) if (e.alt) { try { drawEnemy(e); } catch { /* пропуск */ } }
 }
 
 const STUN_TEXT = { captcha: 'выберите все светофоры', wifi: 'нет сети', bonk: 'бонк' } as const;
