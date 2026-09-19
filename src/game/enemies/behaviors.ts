@@ -6,7 +6,7 @@ import { G, sfx } from '../world';
 import { say, burst, ring, later } from '../fx';
 import { bodyY } from '../body';
 import { hurt, explode, damageProp, dropBomb } from '../combat';
-import { spawnPortal } from '../spawn';
+import { spawnPortal, addEnemy } from '../spawn';
 import { spawnPoint } from '../arena';
 import { stealGun } from '../bosses/floppa';
 import { WW, WH, type Enemy } from '../state';
@@ -50,21 +50,27 @@ function startLeap(e: Enemy, dur: number): void {
   e.state = 'leap'; e.st = e.lmax = dur; e.lx0 = e.x; e.ly0 = e.y; e.ltx = p.x; e.lty = p.y;
 }
 
-export const hand: Behavior = (e, s) => wiggle(s, e.t * 4, 22);
+export const hand: Behavior = (e, s) => {
+  wiggle(s, e.t * 4, 22);
+  // финал и выше: стреляет ногтем
+  if (e.tier >= 1 && e.cd <= 0 && s.d < 160) { e.cd = 3 + random() * 1.5; eshot('ebullet', e.x, e.y - e.hy, aimAt(e.x, e.y - e.hy), 110, 4, 2, { r: 2 }); }
+};
 
 export const spag: Behavior = (e, s) => {
   if (s.d < 85) keepAway(s, .6, .5);
   if (e.cd <= 0 && s.d < 190) {
     e.cd = 1.8 + random(); e.atk = .3;
     const sx = e.x + e.face * 6, sy = e.y - 13;
-    eshot('noodle', sx, sy, Math.atan2(G.p.y - 9 - sy, G.p.x - sx) + rnd(.08), 95, 9, 2.6);
+    // макароны медленно доворачивают на игрока (почерк спагетти); со ступенью — злее
+    eshot('noodle', sx, sy, Math.atan2(G.p.y - 9 - sy, G.p.x - sx) + rnd(.08), 85, 9, 3.2, { home: true, turn: e.tier >= 1 ? 1.4 : .7 });
     sfx('spit', .1);
   }
 };
 
 export const shark: Behavior = (e, s) => {
   if (e.state === 'walk' && s.d < 130 && e.cd <= 0) { e.state = 'wind'; e.st = .5; sfx('charge', .1); }
-  chargeStep(e, s, 230, .5, () => { e.cd = 2.5; });
+  // финал и выше: сразу второй рывок
+  chargeStep(e, s, 230, .5, () => { if (e.tier >= 1 && !e.chain) { e.chain = 1; e.state = 'wind'; e.st = .25; } else { e.chain = 0; e.cd = 2.5; } });
   if (e.state === 'charge' && random() < .5) G.parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: .2, max: .2, color: P.white, size: 1 });
 };
 
@@ -74,27 +80,25 @@ export const croc: Behavior = (e, s) => {
   const tx = p.x + Math.cos(e.orbit) * 90, ty = p.y + Math.sin(e.orbit) * 60, tdx = tx - e.x, tdy = ty - e.y, td = Math.hypot(tdx, tdy) || 1;
   s.vx = tdx / td * s.spd; s.vy = tdy / td * s.spd;
   e.face = s.vx < 0 ? -1 : 1;
-  if (e.cd <= 0 && s.d < 200) { e.cd = 2.2 + random(); const lead = p.moving ? 20 : 0; dropBomb(p.x + p.dx * lead, p.y + p.dy * lead, e.alt); }
+  if (e.cd <= 0 && s.d < 200) {
+    e.cd = 2.2 + random(); const lead = p.moving ? 20 : 0;
+    // финал и выше: дорожка из трёх бомб
+    for (let i = e.tier >= 1 ? -1 : 0; i <= (e.tier >= 1 ? 1 : 0); i++) dropBomb(p.x + p.dx * lead + i * 18, p.y + p.dy * lead, e.alt);
+  }
 };
 
+/** Тун-тун: подходит и бьёт дубиной с разворота по кругу. Замах виден — можно отойти (как ящерица в Alien Shooter). */
 export const tung: Behavior = (e, s) => {
-  s.vx = s.vy = 0;
   if (e.state === 'walk') {
-    if (s.d < 24 && e.cd <= 0) { e.state = 'smack'; e.st = .3; }
-    else if (e.st <= 0) { e.state = 'hop'; e.st = .35; e.hx = s.dx / s.d; e.hy2 = s.dy / s.d; sfx('tung', .4); }
-    else e.st -= s.dt;
-  } else if (e.state === 'hop') {
-    s.vx = (e.hx ?? 0) * 80 * s.slow; s.vy = (e.hy2 ?? 0) * 80 * s.slow; e.st -= s.dt;
-    if (e.st <= 0) { e.state = 'walk'; e.st = .55; }
-  } else if (e.state === 'smack') {
-    e.st -= s.dt;
-    if (e.st <= 0) {
-      e.state = 'walk'; e.st = .6; e.cd = 1.4; e.atk = .25;
-      ring(e.x + e.face * 8, e.y, P.woodL, 28, .25);
-      if (Math.hypot(G.p.x - e.x - e.face * 8, G.p.y - e.y) < 28) hurt(e.dmg, 'ТУН!');
-      sfx('book', .1);
-    }
+    if (s.d < 36 && e.cd <= 0) { e.state = 'wind'; e.st = .45; sfx('tung', .4); }
+    return;
   }
+  s.vx = s.vy = 0; e.st -= s.dt;
+  if (e.st > 0) return;
+  e.state = 'walk'; e.cd = e.tier >= 2 ? 1 : 1.5; e.atk = .25;
+  ring(e.x, e.y, P.woodL, 30, .25);
+  if (Math.hypot(G.p.x - e.x, G.p.y - e.y) < 30) hurt(e.dmg, 'ТУН!');
+  sfx('book', .1);
 };
 
 export const ballerina: Behavior = (e, s) => {
@@ -113,6 +117,7 @@ export const horseFree: Behavior = (e, s) => { s.vx += Math.sin(e.t * 7) * 40; s
 
 export const skibidi: Behavior = (e, s) => {
   wiggle(s, e.t * 9, 55);
+  if (e.tier >= 1 && e.cd <= 0 && s.d < 150) { e.cd = 3 + random(); eshot('drop', e.x, e.y - 14, aimAt(e.x, e.y - 14), 90, 6, 2.5); }
   if (random() < s.dt * .25) { sfx('skibidi', .6); if (random() < .4) say(e.x, e.y - 26, pick(['скибиди доп доп', 'ес ес', 'скибиди']), P.white); }
 };
 
@@ -121,7 +126,7 @@ export const chimp: Behavior = (e, s) => {
   if (s.d < 90) { s.vx = -s.vx * .5; s.vy = -s.vy * .5; }
   if (e.cd <= 0 && s.d < 180) {
     e.cd = 2.6 + random(); e.atk = .3;
-    lob('peel', e.x, e.y, clamp(p.x + rnd(10), 12, WW - 12), clamp(p.y + rnd(6), 16, WH - 10), .7, 12);
+    for (let i = 0; i < (e.tier >= 1 ? 2 : 1); i++) lob('peel', e.x, e.y, clamp(p.x + rnd(10 + i * 20), 12, WW - 12), clamp(p.y + rnd(6 + i * 14), 16, WH - 10), .7 + i * .1, 12);
     sfx('spit', .1);
   }
 };
@@ -135,15 +140,17 @@ export const amogus: Behavior = (e, s) => {
 export const doge: Behavior = (e, s) => {
   if (s.d < 110) keepAway(s, .6, .4);
   if (e.cd <= 0 && s.d < 200) {
-    e.cd = 2.2 + random();
+    e.cd = 2.8 + random();
     const w = pick(['WOW', 'SUCH', 'MUCH', 'VERY', 'AMAZE']), sy = e.y - 8;
-    eshot('word', e.x, sy, aimAt(e.x, sy) + rnd(.1), 80, 9, 3, { w, r: 5 });
+    // веер слов: 3, со ступени — 5
+    const n = e.tier >= 1 ? 5 : 3, a0 = aimAt(e.x, sy);
+    for (let i = 0; i < n; i++) eshot('word', e.x, sy, a0 + (i - (n - 1) / 2) * .22, 70, 7, 3, { w: i % 2 ? pick(['WOW', 'SUCH', 'MUCH', 'VERY', 'AMAZE']) : w, r: 5 });
     sfx('wow', .1);
   }
 };
 
 export const capy: Behavior = (e, s) => {
-  for (const o of G.enemies) if (o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 50) o.calm = .2;
+  for (const o of G.enemies) if (o !== e && Math.hypot(o.x - e.x, o.y - e.y) < (e.tier >= 1 ? 80 : 50)) o.calm = .2;
   chatter(e, s, .12, ['ок я подъезжаю', 'спокойствие', 'ок'], P.capy, 22);
 };
 
@@ -199,24 +206,21 @@ export const oiia: Behavior = (e, s) => {
 };
 
 export const sigma: Behavior = (e, s, auras) => {
-  if (s.d < 110) auras.mogged = true;
+  if (s.d < 110 && !e.broken) auras.mogged = true;
   if (s.d < 60) { s.vx *= .3; s.vy *= .3; }
   if (random() < s.dt * .15) { say(e.x, e.y - 34, pick(['сигма бой', '*мьюинг*', 'не впечатлён', 'гриндсет', 'я не такой, как все']), P.greyL); sfx('sigma', 2); }
 };
 
 /** Квадроберы: стая заходит с флангов и прыгает. */
+/** Квадроберы: стая заходит с флангов и кусает. Без прыжка — прыгунов у нас и так много. */
 export const quadro: Behavior = (e, s) => {
   const p = G.p;
-  if (e.state === 'leap') {
-    s.vx = s.vy = 0;
-    leapStep(e, s.dt, 10);
-    if (e.st <= 0) { e.state = 'walk'; e.z = 0; e.cd = 1.6; if (Math.hypot(p.x - e.x, p.y - e.y) < 12) hurt(e.dmg, e.variant % 3 === 1 ? 'ГАВ' : 'МЯУ'); }
-    return;
-  }
   const side = (e.variant % 3 - 1) * 1.2, base = Math.atan2(-s.dy, -s.dx) + side, off = s.d > 50 ? 40 : 0;
   const tdx = p.x + Math.cos(base) * off - e.x, tdy = p.y + Math.sin(base) * off * .7 - e.y, td = Math.hypot(tdx, tdy) || 1;
-  s.vx = tdx / td * s.spd; s.vy = tdy / td * s.spd;
-  if (s.d < 38 && e.cd <= 0) { startLeap(e, .35); sfx(e.variant % 3 === 1 ? 'woof' : 'meow', .15); }
+  // вблизи — рывок на укус
+  const burstSpd = s.d < 40 ? 1.5 : 1;
+  s.vx = tdx / td * s.spd * burstSpd; s.vy = tdy / td * s.spd * burstSpd;
+  if (s.d < 30 && e.cd <= 0) { e.cd = 1.2; sfx(e.variant % 3 === 1 ? 'woof' : 'meow', .15); }
   chatter(e, s, .1, ['мяу', 'гав', 'я квадробер', 'фыр', 'не трогай хвост', 'у меня хвост'], P.paper, 20);
 };
 
@@ -235,11 +239,10 @@ export const labubu: Behavior = (e, s) => {
 /** Злой дядя Вася (его зовёт скуф): стоит и стреляет 15 секунд. */
 export const evasya: Behavior = (e, s) => {
   s.vx = s.vy = 0; e.life2 = (e.life2 ?? 15) - s.dt;
+  // очередь из трёх, потом пауза
   if (e.cd <= 0 && s.d < 200) {
-    e.cd = .45;
-    const sy = e.y - 9;
-    eshot('ebullet', e.x + e.face * 6, sy, aimAt(e.x, sy) + rnd(.08), 140, 5, 1.8, { r: 2 });
-    sfx('pistol', .1);
+    e.cd = 1.4;
+    for (let i = 0; i < 3; i++) later(i * .1, () => { if (e.dead) return; const sy = e.y - 9; eshot('ebullet', e.x + e.face * 6, sy, aimAt(e.x, sy) + rnd(.06), 140, 5, 1.8, { r: 2 }); sfx('pistol', .1); });
   }
   chatter(e, s, .2, ['Гена, сдавайся', 'я теперь за него', 'мне обещали дачу'], P.red, 28);
   if (e.life2 <= 0) { e.dead = true; burst(e.x, e.y - 10, [P.track, P.white], 20, 60); say(e.x, e.y - 28, 'ушёл на дачу', P.paper); }
@@ -302,9 +305,80 @@ export const jesus: Behavior = (e) => {
   e.cd = boss ? [2.2, 1.9, 1.7][ph] : 3;
   const n = boss ? 14 : 8, off = random() * TAU, sy = bodyY(e);
   radial('amen', e.x, sy, n, off, 60, boss ? 12 : 8, 3.5);
-  if (boss && ph >= 1) later(.3, () => { if (!e.dead) radial('amen', e.x, bodyY(e), n, off + .5 / n * TAU, 75, 12, 3.5); });
+  if ((boss && ph >= 1) || (!boss && e.tier >= 1)) later(.3, () => { if (!e.dead) radial('amen', e.x, bodyY(e), n, off + .5 / n * TAU, 75, 12, 3.5); });
   for (const o of G.enemies) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 70) { o.hp = Math.min(o.max, o.hp + o.max * .35); say(o.x, o.y - o.hy * 2 - 4, '+благословение', P.gold); }
   ring(e.x, sy, P.gold, 70, .5);
   sfx('amen', .2);
   if (boss) for (let i = 0; i < 3 + (G.wave / 5 | 0); i++) spawnPortal('hand', clamp(e.x + rnd(50), 20, WW - 20), clamp(e.y + rnd(50), 24, WH - 20), .6, false);
 };
+
+// ---------- архетипы, которых не хватало ----------
+/** Стример ради хайпа (камикадзе): добегает, полсекунды мигает и взрывается. */
+export const streamer: Behavior = (e, s) => {
+  wiggle(s, e.t * 6, 20);
+  if (e.state === 'walk') {
+    if (s.d < 20) { e.state = 'wind'; e.st = e.tier >= 2 ? .35 : .5; sfx('charge', .1); say(e.x, e.y - 24, pick(['ЧАТ, СМОТРИТЕ', 'ДОНАТ НА ВЗРЫВ', 'ЭТО ДЛЯ ХАЙПА']), P.vest); }
+    return;
+  }
+  s.vx *= .3; s.vy *= .3; e.st -= s.dt;
+  if (e.st <= 0) streamerBoom(e, 1);
+};
+/** Взрыв стримера: при запале — полный, при смерти от пули — поменьше. Задевает и других врагов. */
+export function streamerBoom(e: Enemy, k: number): void {
+  if (e.fused) return;
+  e.fused = true; e.dead = true;
+  explode(e.x, e.y - 6, 26 + 6 * k, 6 * k, { pdmg: 18 * k * (e.tier >= 2 ? 1.25 : 1), colors: [P.vest, P.gold, P.white, P.pink] });
+}
+
+/** Джоконда (снайпер): держит дистанцию, ведёт красную линию прицела, фиксирует её и стреляет сквозь всё. */
+export const mona: Behavior = (e, s) => {
+  const p = G.p;
+  if (e.state === 'walk') {
+    if (s.d < 120) { s.vx = -s.vx; s.vy = -s.vy; } else if (s.d < 190) { s.vx *= .2; s.vy *= .2; }
+    if (e.cd <= 0 && s.d < 260) { e.state = 'wind'; e.st = e.tier >= 2 ? 1.1 : 1.4; sfx('charge', .2); }
+    return;
+  }
+  s.vx = s.vy = 0; e.st -= s.dt;
+  // за 0,35 с до выстрела прицел фиксируется: успей уйти с линии
+  if (e.st > .35) { e.aimX = p.x; e.aimY = p.y - 9; }
+  if (e.st > 0) return;
+  e.state = 'walk'; e.cd = e.tier >= 1 ? 2.6 : 3.5; e.atk = .3;
+  const x0 = e.x, y0 = e.y - e.hy, ax = (e.aimX ?? p.x) - x0, ay = (e.aimY ?? p.y) - y0, L = Math.hypot(ax, ay) || 1, ux = ax / L, uy = ay / L;
+  G.beams.push({ x0, y0, x1: x0 + ux * 500, y1: y0 + uy * 500, t: .25, max: .25, type: 'sniper' });
+  // попали, если игрок у линии
+  const px = p.x - x0, py = p.y - 9 - y0, t = px * ux + py * uy;
+  if (t > 0 && Math.abs(px * uy - py * ux) < p.hr + 2) hurt(20 * (e.tier >= 2 ? 1.25 : 1), 'ШЕСТЬ ПАЛЬЦЕВ');
+  sfx('rail', .1); G.shake = Math.max(G.shake, 2);
+};
+
+/** Принтер нейрослопа (гнездо): стоит и печатает руки, пока его не сломают. */
+export const printer: Behavior = (e, s) => {
+  // стоит намертво: толпа его не сдвигает
+  e.lx0 ??= e.x; e.ly0 ??= e.y; e.x = e.lx0; e.y = e.ly0;
+  s.vx = s.vy = 0; e.kx = e.ky = 0; e.face = 1;
+  // тонера хватает на 12 рук, потом принтер бесполезен (и волна может закончиться)
+  e.leaps ??= 0;
+  if (e.leaps >= 12) {
+    if (e.leaps === 12) { e.leaps++; e.st = 5; say(e.x, e.y - 24, 'ЗАКОНЧИЛСЯ ТОНЕР', P.paper, true); }
+    // без тонера через 5 секунд сгорает сам — чтобы волна не зависла
+    e.st -= s.dt;
+    if (e.st <= 0) { e.dead = true; burst(e.x, e.y - 8, [P.greyL, P.paper, P.ink], 30, 70, 2); say(e.x, e.y - 24, 'ПРИНТЕР СГОРЕЛ', P.red, true); sfx('boom'); }
+    return;
+  }
+  const kids = G.enemies.filter(o => o.master === e && !o.dead).length;
+  if (e.cd <= 0 && kids < (e.tier >= 1 ? 8 : 6)) {
+    e.cd = e.tier >= 2 ? 2 : 3; e.leaps++;
+    const h = addEnemy('hand', e.x + rnd(6), e.y + 8);
+    h.master = e; h.ky = 60;
+    if (random() < .3) say(e.x, e.y - 24, pick(['ПЕЧАТЬ…', 'ЗАМЯТИЕ БУМАГИ', 'ещё 5 рук, фотореализм']), P.paper);
+    sfx('type', .1);
+  }
+};
+
+/** Нейро-шаурма (облако): рядом с игроком пускает вонь, после смерти оставляет облако. */
+export const shawa: Behavior = (e, s) => {
+  if (s.d < 30 && e.cd <= 0) { e.cd = 3; gas(e.x, e.y, 20, 3); say(e.x, e.y - 20, 'ФУ', P.greenL); }
+};
+export function gas(x: number, y: number, r: number, t: number): void {
+  G.zones.push({ x, y, r, t, max: t, kind: 'gas' });
+}

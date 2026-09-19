@@ -11,6 +11,7 @@ import { hitEnemy, hurt, explode, damageProp } from '../combat';
 import { checkPhase } from '../bosses/phases';
 import { gunLevel } from '../inventory';
 import { levelDmg } from '../../content/weapons';
+import { TIERS } from '../../content/tiers';
 import { BEHAVIORS } from './registry';
 import { SpatialHash } from './spatial';
 import type { Auras, Steer } from './types';
@@ -31,6 +32,12 @@ function burn(e: Enemy, dt: number): void {
   G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) - e.hr * .5, vx: rnd(6), vy: -20, life: .4, max: .4, color: pick([P.red, P.vest, P.gold]), size: 1 });
   for (const o of G.enemies) if (o !== e && !o.dead && !o.alt && !(o.burnDur && o.burnDur > 1) && Math.hypot(o.x - e.x, o.y - e.y) < e.r + o.r + 3) { o.burnS = Math.max(o.burnS ?? 0, 1); o.burnDur = 1.5; o.burnTick ??= .5; }
   if (e.burnDur! <= 0) { e.burnS = 0; e.burnDur = 0; }
+}
+function breakArmor(e: Enemy): void {
+  e.broken = true;
+  if (e.type === 'golem') { e.spd *= 1.8; e.dmg *= 1.3; say(e.x, e.y - 34, 'ВЫВЕСКА ОТВАЛИЛАСЬ', P.red, true); burst(e.x, e.y - 20, [P.paper, P.red, P.gold], 24, 70); }
+  else { say(e.x, e.y - 34, '…ладно, впечатлён', P.greyL, true); burst(e.x, e.y - 26, [P.ink, P.white], 10, 50); }
+  sfx('ting', .1);
 }
 /** Мины ур. 3: «Принять cookies?» — враги рядом идут к мине. */
 function lure(e: Enemy, s: Steer): void {
@@ -112,6 +119,10 @@ export function updateEnemies(dt: number): void {
     if (e.stun > 0) { e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt); continue; }
     if (e.charm > 0) { charmed(e, dt); continue; }
     if (isBoss(e) && !e.decoy && !bossTick(e, dt)) continue;
+    // PRO-подписка лечится; голем и сигма на половине здоровья переходят во вторую фазу
+    const regen = TIERS[e.tier].regen;
+    if (regen && e.hp < e.max) e.hp = Math.min(e.max, e.hp + e.max * regen * dt);
+    if (!e.broken && e.hp < e.max / 2 && (e.type === 'golem' || e.type === 'sigma')) breakArmor(e);
     if (e.type !== 'ballerina' || !(e.spin && e.spin > 0)) e.face = dx < 0 ? -1 : 1;
     let slow = e.slowT > 0 ? .5 : 1;
     if (e.calm > 0) { slow *= .5; e.calm -= dt; }

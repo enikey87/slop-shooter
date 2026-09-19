@@ -14,5 +14,6 @@ export const BEHAVIORS: Partial<Record<EnemyId, Behavior>> = {
   horseFree: B.horseFree, skibidi: B.skibidi, chimp: B.chimp, amogus: B.amogus, doge: B.doge, capy: B.capy, troll: B.troll,
   patapim: B.patapim, lirili: B.lirili, apostle: B.apostle, oiia: B.oiia, sigma: B.sigma, quadro: B.quadro, labubu: B.labubu,
   evasya: B.evasya, sixseven: B.sixseven, floppa: B.floppa, fboss: B.floppa, jesus: B.jesus,
+  streamer: B.streamer, mona: B.mona, printer: B.printer, shawa: B.shawa,
   jboss, mama, cboss, skboss, ouro, oseg, skuf
 };

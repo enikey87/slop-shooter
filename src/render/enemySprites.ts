@@ -28,7 +28,9 @@ export function enemyFrame(e: Enemy): number {
     case 'labubu': return e.bite && e.bite > 0 ? 3 : PINGPONG[cycle(e.t, 10, 4)];
     case 'evasya': return cycle(e.t, 2, 2);
     case 'troll': case 'ouro': return cycle(e.t, 4, 2);
-    case 'tung': return e.state === 'hop' ? 1 : e.state === 'smack' ? 2 : e.atk > 0 ? 3 : cycle(e.t, 3, 2);
+    case 'tung': return e.state === 'wind' ? 2 : e.atk > 0 ? 3 : cycle(e.t, 3, 2);
+    case 'streamer': return e.state === 'wind' ? 4 : cycle(e.t, 14, 4);
+    case 'mona': return e.state === 'wind' ? 2 : cycle(e.t, 3, 2);
   }
   return cycle(e.t, (FPS[e.type] ?? 6) * (e.aff === 'fast' ? 1.8 : 1), 4);
 }

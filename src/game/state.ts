@@ -91,7 +91,15 @@ export interface Enemy {
   orbit: number;
   trail: Ghost[];
   phase: number;
+  /** ступень: 0 черновик, 1 финал, 2 8K, 3 PRO (content/tiers.ts) */
+  tier: number;
   dead?: boolean;
+  /** вторая фаза обычного врага: у голема отвалилась вывеска, у сигмы слетели очки */
+  broken?: boolean;
+  /** стример: запал горит, взрыв уже назначен */
+  fused?: boolean;
+  /** джоконда: зафиксированная точка выстрела */
+  aimX?: number; aimY?: number;
   /** горение: стаки (до 3) и сколько ещё горит */
   burnS?: number; burnDur?: number; burnTick?: number;
   /** капча: получает +30% урона */
@@ -177,6 +185,8 @@ export interface EBullet {
   x: number; y: number; vx: number; vy: number;
   life: number; dmg: number; r: number; t: number;
   home?: boolean;
+  /** скорость доворота самонаводящихся, рад/с */
+  turn?: number;
   /** буква, цифра, слово для отрисовки */
   ch?: string; w?: string;
   /** брошенные по дуге (кожура, бутылка) */
@@ -202,7 +212,7 @@ export interface Pickup {
   group?: number; reroll?: boolean;
 }
 export interface Portal { x: number; y: number; type: EnemyId; t: number; max: number; elite: boolean; mama?: boolean; charm?: boolean }
-export type ZoneKind = 'fire' | 'pfire' | 'roots' | 'foam' | 'jpeg';
+export type ZoneKind = 'fire' | 'pfire' | 'roots' | 'foam' | 'jpeg' | 'gas';
 /** без kind — лечащая трава игрока */
 export interface Zone { x: number; y: number; r: number; t: number; max: number; kind?: ZoneKind; heal?: number; burn?: boolean }
 export interface Puddle { x: number; y: number; r: number; t: number; col?: 'holy' | 'sewage' }
@@ -211,7 +221,7 @@ export interface Mine { x: number; y: number; arm: number; dmg: number; dead?: b
 export interface Peel { x: number; y: number; t: number }
 export type AllyKind = 'vasya' | 'dog' | 'turret';
 export interface Ally { kind: AllyKind; x: number; y: number; r?: number; t: number; fire: number; ang: number; face: number; talk: number; shotgun?: boolean; moving?: boolean }
-export interface Beam { x0: number; y0: number; x1: number; y1: number; t: number; max: number; type: 'laser' | 'rail' | 'link' }
+export interface Beam { x0: number; y0: number; x1: number; y1: number; t: number; max: number; type: 'laser' | 'rail' | 'link' | 'sniper' }
 
 // ---------- эффекты ----------
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; ring?: boolean; flash?: boolean }

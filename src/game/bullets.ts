@@ -207,7 +207,7 @@ function updateEBullets(dt: number): void {
   const p = G.p;
   for (const b of G.ebullets) {
     if (b.kind === 'peel' || b.kind === 'bottle') { lobbed(b, dt); continue; }
-    if (b.home) steer(b, Math.atan2(p.y - 9 - b.y, p.x - b.x), 1.3 * dt, Math.hypot(b.vx, b.vy));
+    if (b.home) steer(b, Math.atan2(p.y - 9 - b.y, p.x - b.x), (b.turn ?? 1.3) * dt, Math.hypot(b.vx, b.vy));
     if (b.kind === 'eslipper') steer(b, Math.atan2(p.y - 9 - b.y, p.x - b.x), 2.6 * dt, 110);
     if (b.kind === 'erocket') {
       G.parts.push({ x: b.x, y: b.y, vx: rnd(8), vy: rnd(8), life: .3, max: .3, color: pick([P.red, P.vest]), size: 2 });

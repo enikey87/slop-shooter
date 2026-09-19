@@ -12,6 +12,7 @@ import { mkPickup } from './pickups';
 import { xpNeed, WW, WH, type Enemy, type Prop } from './state';
 import type { WeaponId } from '../content/weapons';
 import { gunKill, gunLevel, offerWeapons } from './inventory';
+import { streamerBoom, gas } from './enemies/behaviors';
 
 export interface HitOpts {
   /** без критов и «несерьёзного» урона (взрывы, ауры, способности) */
@@ -31,7 +32,8 @@ export function hitEnemy(e: Enemy, dmg: number, kx = 0, ky = 0, o: HitOpts = {})
   if (e.type === 'jboss' && G.enemies.some(a => a.type === 'apostle' && a.master === e && !a.dead)) { dmg *= .2; if (random() < .04) say(e.x, e.y - 70, 'СВЯТОЙ ЩИТ: СНАЧАЛА АПОСТОЛЫ', P.gold); }
   if (e.type === 'skboss' && G.props.some(q => q.kind === 'toiletprop')) { dmg *= .15; if (random() < .04) say(e.x, e.y - 60, 'ЗАЩИЩЁН САНТЕХНИКОЙ', P.cyan); }
   if (e.type === 'cboss' && !(e.dive && e.dive > 0) && !e.grounded) { dmg *= .35; if (random() < .04) say(e.x, e.y - 50, 'СЛИШКОМ ВЫСОКО — ЖДИ ПИКЕ', P.grey); }
-  if (e.type === 'sigma' && dmg < 3 && !noCrit) { dmg *= .2; if (random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
+  // сигма без очков уже впечатлена
+  if (e.type === 'sigma' && !e.broken && dmg < 3 && !noCrit) { dmg *= .2; if (random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
   if (e.type === 'capy' && random() < .06) say(e.x, e.y - 22, pick(['ок', 'ок я подъезжаю', 'спокойно']), P.capy);
   let d = dmg;
   if (!noCrit && G.mods.crit && random() < G.mods.crit) { d *= 3; burst(e.x, bodyY(e), P.gold, 4, 50); }
@@ -139,10 +141,12 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
   if (line) say(e.x, e.y - line[2], line[0], line[1]);
   else if (!boss && random() < .2) say(e.x, e.y - e.hy * 2 - 4, pick(KILL_TEXT), pick([P.paper, P.pink, P.gold]));
   const scatter = (k: Enemy, v: number) => { k.kx = rnd(v); k.ky = rnd(v); };
-  if (e.type === 'cat') for (let i = 0; i < 2; i++) scatter(addEnemy('kitten', e.x + rnd(4), e.y + rnd(4)), 110);
+  if (e.type === 'cat') for (let i = 0; i < (e.tier >= 1 ? 3 : 2); i++) scatter(addEnemy('kitten', e.x + rnd(4), e.y + rnd(4)), 110);
   if (e.type === 'horse') { addEnemy('horseFree', e.x, e.y); say(e.x, e.y - 34, 'лошадь свободна', P.horse); }
   if (e.type === 'capy') { for (let i = 0; i < 3; i++) G.pickups.push(mkPickup(e.x + rnd(14), e.y + rnd(8), pick(['ammo', 'hp', 'ammo', 'up'] as const))); say(e.x, e.y - 24, 'ок я уезжаю', P.capy); }
   if (e.type === 'amogus') say(e.x, e.y - 22, 'был импостором', P.red);
+  if (e.type === 'streamer' && !e.fused) later(.08, () => streamerBoom(e, .6));
+  if (e.type === 'shawa') gas(e.x, e.y, 30, 5);
   if (e.type === 'ouro') for (const sg of G.enemies) if (sg.type === 'oseg' && !sg.dead) killEnemy(sg);
   if (e.aff === 'split') for (let i = 0; i < 2; i++) { const k = addEnemy(e.type, e.x + rnd(6), e.y + rnd(6)); k.hp = k.max = k.max * .5; scatter(k, 90); }
   if (boss) {

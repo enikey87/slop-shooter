@@ -34,6 +34,8 @@ export function updatePickups(dt: number): void {
 /** Наступил на пушку: в пустой слот (или та же пушка) — берём сразу, иначе ждём T. */
 function touchWeapon(k: Pickup): void {
   const slot = G.p.guns[WEAPONS[k.gun!].cls - 1];
+  // своя же пустая пушка на полу — просто убираем
+  if (slot && slot.id === k.gun && !k.ammo) { k.t = 0; return; }
   if (!slot || slot.id === k.gun) pickUpWeapon(k);
 }
 

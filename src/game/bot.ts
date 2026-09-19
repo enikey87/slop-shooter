@@ -1,6 +1,6 @@
 // Простой бот для тестов и симулятора баланса: кружит вокруг центра, стреляет в ближайшего, жмёт способности.
 import { G } from './world';
-import { bodyY } from './body';
+import { bodyY, isBoss } from './body';
 import { WEAPONS, type WeaponId } from '../content/weapons';
 import { activeGunId } from './inventory';
 
@@ -18,11 +18,16 @@ export function botInput(o: BotOpts = {}): TickInput {
     if (e.dead || e.charm > 0 || e.disguised) continue;
     const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < td) { td = d; tg = e; }
   }
+  // гнёзда и снайперы — в приоритете, если вплотную никого
+  if (td > 60) for (const e of G.enemies) if ((e.type === 'printer' || e.type === 'mona') && !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < 250) { tg = e; break; }
+  // последние враги волны — идём искать, а не кружим в центре
+  const hunt = tg && !G.boss && !G.queue.length && G.enemies.length <= 3 && td > 150;
   // держим дистанцию под пушку в руках и не липнем к стенам
-  const keep = KEEP[activeGunId()] ?? 90;
+  // к боссам и толстым вплотную не лезем даже с огнемётом
+  const keep = tg && (isBoss(tg) || tg.heavy) ? 90 : KEEP[activeGunId()] ?? 90;
   let mx = WW / 2 - p.x, my = WH / 2 - p.y;
   if (tg && td < keep) { mx = p.x - tg.x; my = p.y - tg.y; }
-  else if (tg && keep < 90 && td > keep * 1.4) { mx = (tg.x - p.x) * 2; my = (tg.y - p.y) * 2; }
+  else if (tg && ((keep < 90 && td > keep * 1.4) || hunt)) { mx = (tg.x - p.x) * 2; my = (tg.y - p.y) * 2; }
   const t = G.t * .7;
   mx += Math.cos(t) * 60; my += Math.sin(t) * 60;
   const actions: Action[] = [];
