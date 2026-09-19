@@ -1,6 +1,6 @@
 // Инвентарь: 6 слотов (1 — Макаров, 2–6 — любые пушки), уровни пушек (у типа, не у слота), пушки на полу и ящики с выбором.
 import { P } from '../content/palette';
-import { WEAPONS, WEAPON_IDS, LEVEL_KILLS, MAX_GUN_LEVEL, type WeaponId } from '../content/weapons';
+import { WEAPONS, WEAPON_IDS, LEVEL_KILLS, MAX_GUN_LEVEL, MAX_KILL_XP, type WeaponId } from '../content/weapons';
 import { EVOLUTIONS } from '../content/evolutions';
 import { PERKS } from '../content/perks';
 import { R, clamp } from '../engine/math';
@@ -34,10 +34,10 @@ function levelUp(id: WeaponId): void {
   banner(`${d.short} УР. ${gl.lvl}`, what, 2.2, gl.lvl % 2 ? P.gold : P.cyan);
   sfx('level');
 }
-/** Убийство этой пушкой. */
-export function gunKill(id: WeaponId): void {
+/** Убийство этой пушкой: опыт по «весу» врага. */
+export function gunKill(id: WeaponId, xp = 1): void {
   const gl = G.gunLvl[id];
-  gl.xp++;
+  gl.xp += Math.min(MAX_KILL_XP, xp);
   while (gl.lvl < MAX_GUN_LEVEL && gl.xp >= LEVEL_KILLS[gl.lvl]) levelUp(id);
 }
 /** Диск апскейла: +1 уровень пушке в руках. */

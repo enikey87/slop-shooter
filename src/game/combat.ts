@@ -90,7 +90,7 @@ export function destroyProp(pr: Prop): void {
     case 'cab':
       hooks.rubble(pr, ['#2f2b3a', '#57526a', P.metalL, P.led, P.red]);
       later(.05, () => explode(cx, cy, 26, 3, { pdmg: 10, colors: [P.cyan, P.led, P.gold, P.white] }));
-      if (random() < .35) G.pickups.push(mkPickup(cx, cy + 10, pick(['ammo', 'up', 'gun'] as const)));
+      if (random() < .35) G.pickups.push(mkPickup(cx, cy + 10, pick(['ammo', 'up', 'ammo'] as const)));
       if (random() < .4) say(cx, cy - 20, pick(['−1 датацентр', 'GPU сгорел', 'обучение прервано']), P.cyan);
       break;
     case 'barrel':
@@ -130,7 +130,7 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
   if (boss) hitStop(.3); else if (e.elite || e.tier >= 2) hitStop(.04);
   if (!peaceful && !boss) ring(e.x, bodyY(e), P.white, 6 + e.r, .12);
   G.kills++; G.score += R(gain); G.xp += gain;
-  if (src) gunKill(src);
+  if (src) gunKill(src, e.score);
   // наградной Макаров: убийства им заряжают блэкаут вдвое быстрее
   const ultMul = src === 'makarov' && gunLevel('makarov') >= 5 ? 2 : 1;
   G.p.ult = Math.min(100, G.p.ult + (boss ? 40 : 1.6) * ultMul / G.mods.cd * [1, 1.35, 1.6][G.ab.r - 1]);
@@ -160,7 +160,7 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
     if (e.type === 'mama') for (const dd of G.enemies) if (dd.decoy && !dd.dead) killEnemy(dd);
     if (e.type === 'jboss') for (const a of G.enemies) if (a.type === 'apostle' && a.master === e && !a.dead) killEnemy(a);
     if (e.type === 'skboss') for (const q of G.props.slice()) if (q.kind === 'toiletprop') destroyProp(q);
-    G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y - 12, 'hp'));
+    G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'ammo'), mkPickup(e.x, e.y - 12, 'hp'));
     offerWeapons(e.x, e.y + 24, 3);
     // сундук эволюции, если есть пушка 5-го уровня с нужным перком
     const evo = evolvable()[0];
@@ -177,8 +177,8 @@ function dropLoot(e: Enemy): void {
   const m = e.elite ? 3 : 1, r = random(), big = e.r > 7 ? 1.8 : 1;
   if (random() < .012 * m) { G.pickups.push(mkPickup(e.x, e.y, 'blindbox')); return; }
   if (random() < .007 * m) { G.pickups.push(mkPickup(e.x, e.y, 'dubai')); return; }
-  if (r < .025 * m * big) G.pickups.push(mkPickup(e.x, e.y, 'up'));
-  else if (r < (.025 + .03) * m * big) G.pickups.push(mkPickup(e.x, e.y, 'gun'));
+  // новые пушки из врагов не падают — только из ящиков после волн и с боссов, чтобы свои успели раскрыться
+  if (r < .012 * m * big) G.pickups.push(mkPickup(e.x, e.y, 'up'));
   else if (r < (.055 * m + .11) * big) G.pickups.push(mkPickup(e.x, e.y, 'ammo'));
   else if (r < (.055 * m + .155) * big) G.pickups.push(mkPickup(e.x, e.y, 'hp'));
 }
