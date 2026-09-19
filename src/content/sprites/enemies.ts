@@ -390,3 +390,55 @@ export function sApostle(g: Grid, f: number): void {
   for (let i = 5; i >= 0; i--) { const a = -1.3 + i * .6; g.ell(6 + Math.cos(a) * 3.2, 8 + Math.sin(a) * 3, 2.2 - i * .2, 2.2 - i * .2, i % 2 ? P.shrimp : '#ffa27a'); }
   g.px(7, 5, P.ink); g.line(8, 5, 10, 3, P.shrimp); g.px(5, 7, P.white);
 }
+
+// ---------- архетипы из бестиария Alien Shooter ----------
+/** Стример ради хайпа: бежит с селфи-палкой и кольцевой лампой. Кадр 4 — мигает перед взрывом. */
+export function sStreamer(g: Grid, f: number): void {
+  const fuse = f === 4, sw = fuse ? 0 : [2, 0, -2, 0][f];
+  g.line(7, 17, 7 + sw, 21, P.jeansD, 2); g.line(10, 17, 10 - sw, 21, P.jeans, 2);
+  g.rect(6 + sw, 22, 3, 1, P.white); g.rect(9 - sw, 22, 3, 1, P.white);
+  g.rect(5, 10, 8, 8, fuse ? P.red : P.vest); g.rect(5, 10, 8, 1, P.vestD); sign(g, 'ON', 6, 12, P.white);
+  // селфи-палка с телефоном и кольцевая лампа
+  g.line(12, 12, 16, 3 + (f % 2), P.metal); g.rect(15, 1 + (f % 2), 3, 4, P.ink); g.px(16, 2 + (f % 2), P.cyan);
+  g.ring(3, 5, 2.5, 2.5, fuse && f % 2 === 0 ? P.red : P.white);
+  g.line(5, 11, 3, 8, P.skin);
+  g.ell(9, 6, 3.5, 4, P.skin); g.rect(5, 2, 8, 2, P.pink); g.px(12, 2, P.pinkL);
+  g.px(10, 5, P.ink); g.px(12, 5, P.ink); g.rect(9, 8, 4, 1, P.ink); g.px(9, 9, P.white);
+}
+
+/** Джоконда с шестью пальцами: портрет в раме на ножках. Кадр 2 — глаза горят (прицел). */
+export function sMona(g: Grid, f: number): void {
+  const aim = f === 2, sw = aim ? 0 : f % 2;
+  g.line(6, 21, 5 - sw, 25, P.woodD, 1); g.line(12, 21, 13 + sw, 25, P.woodD, 1);
+  g.rect(1, 1, 17, 21, P.goldD); g.rect(2, 2, 15, 19, P.gold); g.rect(3, 3, 13, 17, '#4a5a3a');
+  g.rect(3, 13, 13, 7, '#6b5a2a'); g.ell(9, 8, 3.5, 4.5, '#3a2a1a');
+  g.ell(9, 8, 2.5, 3.5, P.pale); g.rect(5, 13, 9, 7, '#2a2418'); g.ell(9, 13, 2, 1, P.pale);
+  g.px(8, 7, aim ? P.red : P.ink); g.px(10, 7, aim ? P.red : P.ink); g.line(8, 10, 10, 10, P.skinD);
+  // шесть пальцев на сложенных руках
+  for (let i = 0; i < 6; i++) g.px(6 + i, 17, P.pale);
+  g.rect(6, 18, 6, 1, P.skinD);
+}
+
+/** Принтер нейрослопа: печатает руки. Кадры 0–3 — лист выползает и уезжает. */
+export function sPrinter(g: Grid, f: number): void {
+  g.rect(1, 9, 20, 9, P.greyL); g.rect(1, 9, 20, 2, P.white); g.rect(1, 16, 20, 2, P.grey);
+  g.rect(3, 12, 16, 2, P.ink); g.px(17, 10, f % 2 ? P.led : P.green); g.px(15, 10, P.red);
+  g.rect(4, 5, 14, 4, P.grey); g.rect(5, 3, 12, 2, P.paper);
+  // лист с рукой выползает из щели
+  const out = [0, 2, 4, 2][f];
+  g.rect(6, 13 + out, 10, 3, P.paper);
+  for (let i = 0; i < 5; i++) g.px(8 + i * 1.5, 14 + out + (i % 2), P.skin);
+  g.rect(2, 18, 3, 2, P.metal); g.rect(17, 18, 3, 2, P.metal);
+}
+
+/** Нейро-шаурма: лаваш на ножках, из неё лезет капуста и вонь. */
+export function sShawa(g: Grid, f: number): void {
+  const sw = [1, 0, -1, 0][f];
+  g.line(6, 16, 6 + sw, 19, P.tan, 1); g.line(10, 16, 10 - sw, 19, P.tan, 1);
+  g.ell(8, 10, 5, 7, P.pale); g.ell(8, 10, 4, 6, '#e8c890');
+  g.rect(4, 4, 9, 3, P.green); g.px(5, 3, P.greenL); g.px(9, 2, P.green); g.px(11, 3, P.greenL); g.px(7, 5, P.red); g.px(10, 5, P.red);
+  for (let i = 0; i < 3; i++) g.line(5 + i * 2, 8 + i * 2, 11 - i, 9 + i * 2, '#c9a060');
+  g.px(6, 11, P.ink); g.px(10, 11, P.ink); g.rect(7, 14, 3, 1, P.ink);
+  // вонь
+  for (let i = 0; i < 3; i++) g.px(2 + i * 5 + (f % 2), 1 - (i % 2) + (f % 2), P.greenL);
+}

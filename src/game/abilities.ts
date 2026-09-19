@@ -34,7 +34,7 @@ export function abilityQ(): void {
   let n = 0;
   for (const e of G.enemies.slice()) if (Math.hypot(e.x - p.x, e.y - p.y) < rad) {
     e.stun = isBoss(e) ? 1 + L * .3 : lv(L, [2.6, 3.5, 4]); e.stunKind = n++ < 4 ? 'wifi' : '';
-    if (L >= 3) hitEnemy(e, 20 * G.mods.dmg, 0, 0, true);
+    if (L >= 3) hitEnemy(e, 20 * G.mods.dmg, 0, 0, { noCrit: true });
   }
   if (L >= 3) for (const b of G.ebullets) if (Math.hypot(b.x - p.x, b.y - p.y) < rad && b.kind !== 'peel' && b.kind !== 'bottle') reflectBullet(b.x, b.y, Math.atan2(b.y - p.y, b.x - p.x), 2 * G.mods.dmg, 1, 40);
   G.ebullets = G.ebullets.filter(b => Math.hypot(b.x - p.x, b.y - p.y) > rad);
@@ -59,7 +59,7 @@ export function abilityR(): void {
   p.ult = 0;
   for (const e of G.enemies.slice()) {
     if (e.x < c.x - 10 || e.x > c.x + v.w + 10 || e.y < c.y - 10 || e.y > c.y + v.h + 30) continue;
-    hitEnemy(e, lv(L, [40, 60, 80]) * G.mods.dmg + (isBoss(e) ? e.max * lv(L, [.12, .15, .18]) : 0), 0, 0, true);
+    hitEnemy(e, lv(L, [40, 60, 80]) * G.mods.dmg + (isBoss(e) ? e.max * lv(L, [.12, .15, .18]) : 0), 0, 0, { noCrit: true });
     if (L >= 3 && !e.dead) e.stun = isBoss(e) ? 1.2 : 3;
   }
   for (const pr of G.props.slice()) if (pr.x > c.x && pr.x < c.x + v.w && pr.y > c.y && pr.y < c.y + v.h && pr.kind !== 'couch') damageProp(pr, 12);
@@ -87,7 +87,7 @@ export function abilityV(): void {
   const back = L >= 2 ? 50 : 30, from = Math.max(0, p.hist.length - back), h = p.hist[from];
   for (let i = from; i < p.hist.length; i += 2) G.parts.push({ x: p.hist[i].x, y: p.hist[i].y - 10, vx: 0, vy: -10, life: .6, max: .6, color: P.cyan, size: 2 });
   if (L >= 3) { const ox = p.x, oy = p.y; say(ox, oy - 20, 'ТОЧКА СОХРАНЕНИЯ', P.cyan); later(.35, () => explode(ox, oy - 6, 42, 12 * G.mods.dmg, { colors: [P.cyan, P.white, P.purple] })); }
-  if (L >= 2) { const s = curSlot(); if (s.id) s.ammo += R(WEAPONS[s.id].pick * .5); }
+  if (L >= 2) { const s = curSlot(); if (s.id !== 'makarov') s.ammo += R(WEAPONS[s.id].box * .5); }
   p.x = h.x; p.y = h.y; p.hp = Math.max(p.hp, h.hp); p.inv = .6; p.hist = [];
   say(p.x, p.y - 30, 'CTRL+Z', P.cyan, true); sfx('rewind');
 }

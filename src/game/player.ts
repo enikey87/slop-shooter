@@ -5,7 +5,7 @@ import { random, rnd } from '../engine/rng';
 import { G } from './world';
 import { pushOut } from './arena';
 import { hitEnemy, checkDeath } from './combat';
-import { gunPivot, shoot } from './weapons';
+import { gunPivot, updateTrigger } from './weapons';
 import type { TickInput } from './input';
 import { WW, WH } from './state';
 
@@ -15,7 +15,7 @@ function tickCooldowns(dt: number): void {
   const p = G.p;
   p.noGun -= dt; p.dashCd -= dt; p.inv -= dt; p.hit -= dt; p.recoil = Math.max(0, p.recoil - dt * 20);
   p.cdQ = Math.max(0, p.cdQ - dt); p.cdE = Math.max(0, p.cdE - dt); p.cdC = Math.max(0, p.cdC - dt); p.cdV = Math.max(0, p.cdV - dt); p.cdG = Math.max(0, p.cdG - dt);
-  for (const sl of p.guns) if (sl.altCd && sl.altCd > 0) sl.altCd -= dt;
+  for (const sl of p.guns) if (sl?.altCd && sl.altCd > 0) sl.altCd -= dt;
   p.scramble = Math.max(0, p.scramble - dt);
 }
 
@@ -65,15 +65,14 @@ function aimAndFire(dt: number, input: TickInput): void {
   }
   if (p.wobble) p.ang += Math.sin(G.t * 9) * .35;
   p.face = Math.cos(p.ang) >= 0 ? 1 : -1;
-  p.fireT -= dt;
-  if (input.fire && p.fireT <= 0 && p.dashT <= 0) shoot();
+  updateTrigger(dt, input.fire);
 }
 
 function aura(dt: number): void {
   const p = G.p, m = G.mods;
   if (!m.aura) return;
   p.auraT -= dt;
-  if (p.auraT <= 0) { p.auraT = .5; for (const e of G.enemies.slice()) if (!e.alt && Math.hypot(e.x - p.x, e.y - p.y) < 28) hitEnemy(e, m.aura * .5 * m.dmg, 0, 0, true); }
+  if (p.auraT <= 0) { p.auraT = .5; for (const e of G.enemies.slice()) if (!e.alt && Math.hypot(e.x - p.x, e.y - p.y) < 28) hitEnemy(e, m.aura * .5 * m.dmg, 0, 0, { noCrit: true }); }
 }
 
 export function updatePlayer(dt: number, input: TickInput): void {

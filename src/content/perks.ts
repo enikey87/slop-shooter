@@ -20,7 +20,7 @@ export interface PerkDef {
 
 export const PERKS: readonly PerkDef[] = [
   { id: 'finger', name: 'ШЕСТОЙ ПАЛЕЦ', desc: '+18% скорострельность. Палец не твой, но работает.', max: 3, apply: m => { m.rate *= 1.18; } },
-  { id: 'double', name: 'ДВОЙНОЙ ПРОМПТ', desc: '+1 снаряд у Макарова, пулемёта, степлера, книги и ракетницы.', max: 2, apply: m => { m.proj++; } },
+  { id: 'double', name: 'ДВОЙНОЙ ПРОМПТ', desc: '+1 снаряд у Макарова, пулемёта, ракетницы, тапка и нян-пушки.', max: 2, apply: m => { m.proj++; } },
   { id: 'filter', name: 'КОНТЕНТ-ФИЛЬТР', desc: 'Пули и скобы пробивают ещё одного врага.', max: 3, apply: m => { m.pierce++; } },
   { id: 'coffee', name: 'КОФЕ 3 В 1', desc: '+12% к скорости бега.', max: 3, apply: m => { m.speed *= 1.12; } },
   { id: 'bag', name: 'КОЖАНЫЙ МЕШОК', desc: '+25 к максимуму реальности и сразу лечит на 25.', max: 3, apply: (m, p) => { m.maxHp += 25; p.hp += 25; } },

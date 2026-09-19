@@ -10,8 +10,20 @@ import { bodyY } from './body';
 import { addEnemy } from './spawn';
 import { mkPickup } from './pickups';
 import { xpNeed, WW, WH, type Enemy, type Prop } from './state';
+import type { WeaponId } from '../content/weapons';
+import { gunKill, gunLevel, offerWeapons } from './inventory';
+import { streamerBoom, gas } from './enemies/behaviors';
 
-export function hitEnemy(e: Enemy, dmg: number, kx: number, ky: number, noCrit = false): void {
+export interface HitOpts {
+  /** без критов и «несерьёзного» урона (взрывы, ауры, способности) */
+  noCrit?: boolean;
+  /** из какой пушки — для опыта пушки */
+  src?: WeaponId;
+  /** мимо водяного знака (синее пламя) */
+  pierceShield?: boolean;
+}
+export function hitEnemy(e: Enemy, dmg: number, kx = 0, ky = 0, o: HitOpts = {}): void {
+  const noCrit = !!o.noCrit;
   if (e.dead || e.charm > 0) return;
   if (e.disguised) { e.disguised = false; say(e.x, e.y - 20, 'SUS!', P.red, true); sfx('sus'); }
   if (e.type === 'ouro' && !e.eating && e.segs?.some(sg => !sg.dead)) { dmg *= .25; if (random() < .04) say(e.x, e.y - 30, 'сначала хвост', P.purple); }
@@ -20,12 +32,15 @@ export function hitEnemy(e: Enemy, dmg: number, kx: number, ky: number, noCrit =
   if (e.type === 'jboss' && G.enemies.some(a => a.type === 'apostle' && a.master === e && !a.dead)) { dmg *= .2; if (random() < .04) say(e.x, e.y - 70, 'СВЯТОЙ ЩИТ: СНАЧАЛА АПОСТОЛЫ', P.gold); }
   if (e.type === 'skboss' && G.props.some(q => q.kind === 'toiletprop')) { dmg *= .15; if (random() < .04) say(e.x, e.y - 60, 'ЗАЩИЩЁН САНТЕХНИКОЙ', P.cyan); }
   if (e.type === 'cboss' && !(e.dive && e.dive > 0) && !e.grounded) { dmg *= .35; if (random() < .04) say(e.x, e.y - 50, 'СЛИШКОМ ВЫСОКО — ЖДИ ПИКЕ', P.grey); }
-  if (e.type === 'sigma' && dmg < 3 && !noCrit) { dmg *= .2; if (random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
+  // сигма без очков уже впечатлена
+  if (e.type === 'sigma' && !e.broken && dmg < 3 && !noCrit) { dmg *= .2; if (random() < .05) say(e.x, e.y - 34, 'не впечатлён', P.greyL); }
   if (e.type === 'capy' && random() < .06) say(e.x, e.y - 22, pick(['ок', 'ок я подъезжаю', 'спокойно']), P.capy);
   let d = dmg;
   if (!noCrit && G.mods.crit && random() < G.mods.crit) { d *= 3; burst(e.x, bodyY(e), P.gold, 4, 50); }
   if (G.mods.mark) { if (e.marked) d *= 1.25; e.marked = true; }
-  if (e.shield > 0) {
+  // капча: оглушённые получают +30%
+  if (e.vulnT && e.vulnT > 0) d *= 1.3;
+  if (e.shield > 0 && !o.pierceShield) {
     e.shield -= d; e.flash = .07; sfx('ting', .05);
     if (e.shield <= 0) { e.shield = 0; say(e.x, bodyY(e) - 14, 'водяной знак снят', P.white); burst(e.x, bodyY(e), P.white, 16, 60); }
     return;
@@ -34,10 +49,10 @@ export function hitEnemy(e: Enemy, dmg: number, kx: number, ky: number, noCrit =
   const k = e.heavy ? .25 : 1; e.kx += kx * k; e.ky += ky * k;
   sfx('hit', .03);
   if (e.type === 'grandpa' && !e.saidMonster) { e.saidMonster = true; say(e.x, e.y - 30, 'ты монстр', P.pink); }
-  if (e.hp <= 0) killEnemy(e);
+  if (e.hp <= 0) killEnemy(e, false, o.src);
 }
 
-export interface ExplodeOpts { pdmg?: number; colors?: readonly string[]; props?: boolean }
+export interface ExplodeOpts { pdmg?: number; colors?: readonly string[]; props?: boolean; src?: WeaponId }
 export function explode(x: number, y: number, rad: number, dmg: number, o: ExplodeOpts = {}): void {
   const colors = o.colors ?? [P.cyan, P.pink, P.gold, P.purple, P.white];
   G.shake = Math.max(G.shake, rad > 30 ? 6 : 4);
@@ -49,9 +64,10 @@ export function explode(x: number, y: number, rad: number, dmg: number, o: Explo
   hooks.splat(x, y + 4, 8, ['#241d2e', '#1a1423']);
   sfx('boom', .05);
   for (const e of G.enemies.slice()) {
-    if (e.alt) continue;
-    const d = Math.hypot(e.x - x, bodyY(e) - y);
-    if (d < rad + e.hr) hitEnemy(e, dmg * (1 - d / (rad + e.hr) * .5), (e.x - x) / (d || 1) * 90, (e.y - y) / (d || 1) * 90, true);
+    if (e.air) continue;
+    // летающих считаем по земле под ними и задеваем вполсилы
+    const d = e.alt ? Math.hypot(e.x - x, e.y - y) : Math.hypot(e.x - x, bodyY(e) - y);
+    if (d < rad + e.hr) hitEnemy(e, dmg * (1 - d / (rad + e.hr) * .5) * (e.alt ? .5 : 1), (e.x - x) / (d || 1) * 90, (e.y - y) / (d || 1) * 90, { noCrit: true, src: o.src });
   }
   if (o.pdmg) { const p = G.p; if (Math.hypot(p.x - x, p.y - 6 - y) < rad) hurt(o.pdmg, 'бабах'); }
   if (o.props !== false) for (const pr of G.props.slice()) if (Math.hypot(pr.x + pr.w / 2 - x, pr.y + pr.h / 2 - y - 6) < rad + 6) damageProp(pr, dmg * 2);
@@ -102,14 +118,19 @@ const DEATH_LINE: Partial<Record<string, [string, string, number]>> = {
   tung: ['сахур отменяется', P.woodL, 30], ballerina: ['капучино остыл', P.coffeeL, 30]
 };
 
-export function killEnemy(e: Enemy, peaceful = false): void {
+export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
   if (e.dead) return;
   e.dead = true;
   const T = enemyDef(e.type), boss = !!T.boss && !e.decoy;
   if (e.decoy) say(e.x, e.y - 40, 'ГАЛЛЮЦИНАЦИЯ', P.purple);
   const gain = e.score * G.mods.likes * (peaceful ? 2 : 1);
   G.kills++; G.score += R(gain); G.xp += gain;
-  G.p.ult = Math.min(100, G.p.ult + (boss ? 40 : 1.6) / G.mods.cd * [1, 1.35, 1.6][G.ab.r - 1]);
+  if (src) gunKill(src);
+  // наградной Макаров: убийства им заряжают блэкаут вдвое быстрее
+  const ultMul = src === 'makarov' && gunLevel('makarov') >= 5 ? 2 : 1;
+  G.p.ult = Math.min(100, G.p.ult + (boss ? 40 : 1.6) * ultMul / G.mods.cd * [1, 1.35, 1.6][G.ab.r - 1]);
+  // огнемёт ур. 3: сгоревшие взрываются
+  if (e.burnDur && e.burnDur > 0 && gunLevel('flame') >= 3) later(.05, () => explode(e.x, e.y - 4, 18, 3 * G.mods.dmg, { colors: [P.vest, P.gold, P.red], props: false, src: 'flame' }));
   while (G.xp >= xpNeed(G.p.level)) { G.xp -= xpNeed(G.p.level); G.p.level++; G.pendingPerks++; }
   if (!peaceful) {
     hooks.enemyDied(e);
@@ -120,10 +141,12 @@ export function killEnemy(e: Enemy, peaceful = false): void {
   if (line) say(e.x, e.y - line[2], line[0], line[1]);
   else if (!boss && random() < .2) say(e.x, e.y - e.hy * 2 - 4, pick(KILL_TEXT), pick([P.paper, P.pink, P.gold]));
   const scatter = (k: Enemy, v: number) => { k.kx = rnd(v); k.ky = rnd(v); };
-  if (e.type === 'cat') for (let i = 0; i < 2; i++) scatter(addEnemy('kitten', e.x + rnd(4), e.y + rnd(4)), 110);
+  if (e.type === 'cat') for (let i = 0; i < (e.tier >= 1 ? 3 : 2); i++) scatter(addEnemy('kitten', e.x + rnd(4), e.y + rnd(4)), 110);
   if (e.type === 'horse') { addEnemy('horseFree', e.x, e.y); say(e.x, e.y - 34, 'лошадь свободна', P.horse); }
   if (e.type === 'capy') { for (let i = 0; i < 3; i++) G.pickups.push(mkPickup(e.x + rnd(14), e.y + rnd(8), pick(['ammo', 'hp', 'ammo', 'up'] as const))); say(e.x, e.y - 24, 'ок я уезжаю', P.capy); }
   if (e.type === 'amogus') say(e.x, e.y - 22, 'был импостором', P.red);
+  if (e.type === 'streamer' && !e.fused) later(.08, () => streamerBoom(e, .6));
+  if (e.type === 'shawa') gas(e.x, e.y, 30, 5);
   if (e.type === 'ouro') for (const sg of G.enemies) if (sg.type === 'oseg' && !sg.dead) killEnemy(sg);
   if (e.aff === 'split') for (let i = 0; i < 2; i++) { const k = addEnemy(e.type, e.x + rnd(6), e.y + rnd(6)); k.hp = k.max = k.max * .5; scatter(k, 90); }
   if (boss) {
@@ -132,7 +155,8 @@ export function killEnemy(e: Enemy, peaceful = false): void {
     if (e.type === 'mama') for (const dd of G.enemies) if (dd.decoy && !dd.dead) killEnemy(dd);
     if (e.type === 'jboss') for (const a of G.enemies) if (a.type === 'apostle' && a.master === e && !a.dead) killEnemy(a);
     if (e.type === 'skboss') for (const q of G.props.slice()) if (q.kind === 'toiletprop') destroyProp(q);
-    G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y + 12, 'gun'), mkPickup(e.x, e.y - 12, 'hp'));
+    G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y - 12, 'hp'));
+    offerWeapons(e.x, e.y + 24, 3);
     banner('БОСС ПОВЕРЖЕН', pick(['I’m sorry, I can’t continue', 'модель снята с продакшена', 'ошибка 500: босс не найден']), 2.4, P.gold);
     G.shake = 10;
     return;

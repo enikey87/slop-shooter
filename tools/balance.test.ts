@@ -29,7 +29,7 @@ it(`баланс: ${SEEDS} забегов по ${MINUTES} мин`, { timeout: 60
       lastHp = G.p.hp;
     }
     const top = [...hits].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k}:${Math.round(v)}`).join(', ');
-    rows.push({ seed, result: G.state, wave: G.wave, level: G.p.level, kills: G.kills, min: +(G.t / 60).toFixed(1), bossMin: +(bossTime / 60).toFixed(1), guns: G.p.guns.length, topDamage: top });
+    rows.push({ seed, result: G.state, wave: G.wave, level: G.p.level, kills: G.kills, min: +(G.t / 60).toFixed(1), bossMin: +(bossTime / 60).toFixed(1), guns: G.p.guns.filter(Boolean).map(s => `${s!.id}:${G.gunLvl[s!.id].lvl}`).join(' '), topDamage: top });
   }
   console.table(rows);
   const waves = rows.map(r => r.wave).sort((a, b) => a - b);

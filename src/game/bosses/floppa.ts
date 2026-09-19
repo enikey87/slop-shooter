@@ -9,7 +9,7 @@ import { curSlot, cycleGun } from '../weapons';
 
 export function stealGun(): void {
   const s = curSlot();
-  if (!s.id || s.stolen) return;
+  if (s.id === 'makarov' || s.stolen) return;
   s.stolen = true; cycleGun(1);
   const sp = spawnPoint(170);
   G.pickups.push({ ...mkPickup(sp.x, sp.y, 'stolen'), gun: s.id, t: 9999 });

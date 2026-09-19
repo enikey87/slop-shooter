@@ -3,6 +3,7 @@ import { P } from '../content/palette';
 import { enemyDef, TYPES, SEG_SKINS, type EnemyId } from '../content/enemies';
 import { AFFIX, type AffixId } from '../content/affixes';
 import { BOSS_SUB } from '../content/bosses';
+import { TIERS, tierOdds } from '../content/tiers';
 import { TAU } from '../engine/math';
 import { random, pick } from '../engine/rng';
 import { G, hooks, sfx } from './world';
@@ -16,14 +17,16 @@ const BOSS_TRACK: Partial<Record<EnemyId, string>> = { jboss: 'bossOrgan', mama:
 export const eliteChance = (): number => (G.wave < 4 ? 0 : Math.min(.28, .05 + G.wave * .012));
 
 export function makeEnemy(type: EnemyId, x: number, y: number, elite = false): Enemy {
-  const T = enemyDef(type), n = Math.max(1, G.wave), hpMul = 1 + (n - 1) * .06 + Math.max(0, n - 15) * .035;
+  // здоровье растёт с волной медленнее, чем раньше (4,5% вместо 6%): часть сложности несут ступени
+  const T = enemyDef(type), n = Math.max(1, G.wave), hpMul = 1 + (n - 1) * .045 + Math.max(0, n - 15) * .03;
   const e: Enemy = {
     type, x, y, r: T.r, hy: T.hy, hr: T.hr, hp: T.hp * hpMul, max: T.hp * hpMul, alt: T.fly || 0, z: 0,
     spd: T.spd * (1 + Math.min(.35, n * .018)) * (.9 + random() * .2), heavy: !!T.heavy,
     dmg: T.dmg * (1 + n * .012), score: T.score, t: random() * 10, face: 1, hitCd: 0, cd: 1 + random() * 2, kx: 0, ky: 0, flash: 0, atk: 0,
     variant: (random() * 4) | 0, elite: false, aff: null, affT: 1 + random(), stun: 0, slowT: 0, shield: 0, trail: [],
-    state: 'walk', st: 0, orbit: random() * TAU, charm: 0, calm: 0, vis: 1, phase: 0
+    state: 'walk', st: 0, orbit: random() * TAU, charm: 0, calm: 0, vis: 1, phase: 0, tier: 0
   };
+  if (!T.boss && T.cost) applyTier(e, rollTier(n));
   if (type === 'amogus') e.disguised = true;
   if (type === 'ouro' || type === 'oseg') e.noSep = true;
   if (elite && !T.boss) {
@@ -44,6 +47,16 @@ export function addEnemy(type: EnemyId, x: number, y: number, elite = false): En
   const e = makeEnemy(type, x, y, elite);
   G.enemies.push(e);
   return e;
+}
+
+function rollTier(n: number): number {
+  const [f, k, pro] = tierOdds(n), r = random();
+  return r < pro ? 3 : r < pro + k ? 2 : r < pro + k + f ? 1 : 0;
+}
+/** Ступень: здоровье, скорость, урон. Трюк вида включают поведения по e.tier. */
+export function applyTier(e: Enemy, tier: number): void {
+  const t = TIERS[tier];
+  e.tier = tier; e.hp *= t.hp; e.max *= t.hp; e.spd *= t.spd; e.dmg *= t.dmg; e.score = Math.round(e.score * (1 + tier * .5));
 }
 
 export function spawnPortal(type: EnemyId, x: number, y: number, t = .9, elite?: boolean): void {

@@ -33,7 +33,7 @@ export const TYPES = {
   shark:     { r: 6,  hy: 9,  hr: 8,  hp: 8,   spd: 40, dmg: 14, score: 5,   cost: 4,  from: 3, w: 2.4 },
   ballerina: { r: 5,  hy: 12, hr: 7,  hp: 7,   spd: 44, dmg: 9,  score: 5,   cost: 4,  from: 4, w: 2 },
   golem:     { r: 9,  hy: 15, hr: 11, hp: 22,  spd: 17, dmg: 22, score: 6,   cost: 6,  from: 4, w: 1.6, heavy: 1 },
-  tung:      { r: 6,  hy: 13, hr: 8,  hp: 14,  spd: 0,  dmg: 14, score: 6,   cost: 5,  from: 5, w: 2 },
+  tung:      { r: 6,  hy: 13, hr: 8,  hp: 14,  spd: 30, dmg: 14, score: 6,   cost: 5,  from: 5, w: 2 },
   grandpa:   { r: 6,  hy: 11, hr: 8,  hp: 12,  spd: 16, dmg: 0,  score: 4,   cost: 5,  from: 5, w: 1 },
   croc:      { r: 8,  hy: 0,  hr: 10, hp: 10,  spd: 38, dmg: 0,  score: 7,   cost: 6,  from: 6, w: 1.8, fly: 18 },
   horse:     { r: 9,  hy: 15, hr: 11, hp: 25,  spd: 20, dmg: 18, score: 8,   cost: 8,  from: 7, w: 1.4, heavy: 1 },
@@ -62,7 +62,12 @@ export const TYPES = {
   skboss:    { r: 16, hy: 26, hr: 20, hp: 400, spd: 22, dmg: 25, score: 220, boss: 'СКИБИДИ-УНИТАЗ ПРАЙМ', heavy: 1 },
   fboss:     { r: 18, hy: 20, hr: 22, hp: 420, spd: 26, dmg: 30, score: 220, boss: 'ВЕЛИКАЯ ШЛЁПА', heavy: 1 },
   ouro:      { r: 10, hy: 9,  hr: 13, hp: 300, spd: 44, dmg: 25, score: 300, boss: 'МОДЕЛЬ-КОЛЛАПС: УРОБОРОС', heavy: 1 },
-  oseg:      { r: 7,  hy: 8,  hr: 9,  hp: 28,  spd: 0,  dmg: 15, score: 4,   heavy: 1 }
+  oseg:      { r: 7,  hy: 8,  hr: 9,  hp: 28,  spd: 0,  dmg: 15, score: 4,   heavy: 1 },
+  // архетипы, которых не хватало (по бестиарию Alien Shooter)
+  streamer:  { r: 5,  hy: 11, hr: 7,  hp: 5,   spd: 68, dmg: 0,  score: 5,   cost: 3,  from: 4, w: 1.6 },
+  mona:      { r: 6,  hy: 14, hr: 9,  hp: 14,  spd: 26, dmg: 0,  score: 8,   cost: 6,  from: 7, w: 1 },
+  printer:   { r: 9,  hy: 10, hr: 11, hp: 60,  spd: 0,  dmg: 0,  score: 12,  cost: 8,  from: 6, w: .7, heavy: 1 },
+  shawa:     { r: 6,  hy: 9,  hr: 8,  hp: 16,  spd: 22, dmg: 10, score: 6,   cost: 4,  from: 5, w: 1.2 }
 } as const satisfies Record<string, EnemyDef>;
 
 export type EnemyId = keyof typeof TYPES;
@@ -76,11 +81,12 @@ export const SPLAT: Record<EnemyId, readonly string[]> = {
   horse: [P.suit, P.horse], horseFree: [P.horse, P.hair], mama: [P.pink, P.pinkD, P.white],
   skibidi: [P.toilet, P.skin, P.cyan], chimp: [P.banana, P.monkey], amogus: [P.sus, P.visor], doge: [P.doge, P.dogeL],
   capy: [P.capy, P.orange], troll: [P.troll, P.greyL], patapim: [P.wood, P.green, P.tan], floppa: [P.floppa, P.floppaD],
-  lirili: [P.cactus, P.grey], apostle: [P.shrimp, P.gold], oiia: [P.grey, P.oiiaW, P.pink], sigma: [P.skin, P.turtle], quadro: [P.white, P.brownL, P.orange, P.pink], labubu: [P.lab, P.labP], evasya: [P.track, P.white], skuf: [P.tank, P.skin, P.bottle, P.vest], sixseven: [P.green, P.skin, P.white], skboss: [P.toilet, P.cyan, P.skin], fboss: [P.floppa, P.floppaD, P.pink], ouro: [P.purple, P.pink, P.gold], oseg: [P.purple, P.gold]
+  lirili: [P.cactus, P.grey], apostle: [P.shrimp, P.gold], oiia: [P.grey, P.oiiaW, P.pink], sigma: [P.skin, P.turtle], quadro: [P.white, P.brownL, P.orange, P.pink], labubu: [P.lab, P.labP], evasya: [P.track, P.white], skuf: [P.tank, P.skin, P.bottle, P.vest], sixseven: [P.green, P.skin, P.white], skboss: [P.toilet, P.cyan, P.skin], fboss: [P.floppa, P.floppaD, P.pink], ouro: [P.purple, P.pink, P.gold], oseg: [P.purple, P.gold],
+  streamer: [P.vest, P.gold, P.white], mona: [P.brown, P.gold, P.skin], printer: [P.greyL, P.paper, P.skin], shawa: [P.tan, P.green, P.white]
 };
 
 /** Скорость анимации, кадров в секунду. */
-export const FPS: Partial<Record<EnemyId, number>> = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8, sigma: 6, quadro: 14, skuf: 4 };
+export const FPS: Partial<Record<EnemyId, number>> = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8, sigma: 6, quadro: 14, skuf: 4, streamer: 14, mona: 3, printer: 6, shawa: 5 };
 
 /** Из кого собирается хвост Уробороса. */
 export const SEG_SKINS: readonly EnemyId[] = ['sixseven', 'hand', 'cat', 'spag', 'shark', 'ballerina', 'doge', 'capy', 'skibidi', 'amogus', 'grandpa', 'tung', 'chimp', 'golem'];
