@@ -5,6 +5,7 @@ import { random } from '../engine/rng';
 import { G, sfx } from './world';
 import { say } from './fx';
 import { explode, checkDeath } from './combat';
+import { detonateMine } from './weapons';
 
 /** Эллипс «на полу»: по Y сжат в 1.6 раза. */
 const onFloor = (x: number, y: number, cx: number, cy: number, r: number): boolean => Math.hypot(x - cx, (y - cy) * 1.6) < r;
@@ -41,8 +42,9 @@ export function updateHazards(dt: number): void {
   for (const mn of G.mines) {
     mn.arm -= dt;
     if (mn.arm > 0) continue;
-    if (G.enemies.some(e => (!e.alt || e.alt < 10) && !(e.charm > 0) && !e.disguised && Math.hypot(e.x - mn.x, e.y - mn.y) < 12)) {
-      mn.dead = true; explode(mn.x, mn.y - 4, 32, mn.dmg, { colors: [P.brownL, P.white, P.gold, P.coffee] });
+    // срабатывает и под низко летящими (крокодилы, тролль), но не под боссом-бомбардировщиком
+    if (G.enemies.some(e => (!e.alt || e.alt < 20) && !(e.charm > 0) && !e.disguised && Math.hypot(e.x - mn.x, e.y - mn.y) < 12)) {
+      detonateMine(mn);
       if (random() < .3) say(mn.x, mn.y - 20, 'cookies приняты', P.brownL);
     }
   }

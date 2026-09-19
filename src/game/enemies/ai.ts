@@ -9,6 +9,8 @@ import { bodyY, scaleOf, isBoss } from '../body';
 import { propAt, pushOut } from '../arena';
 import { hitEnemy, hurt, explode, damageProp } from '../combat';
 import { checkPhase } from '../bosses/phases';
+import { gunLevel } from '../inventory';
+import { levelDmg } from '../../content/weapons';
 import { BEHAVIORS } from './registry';
 import { SpatialHash } from './spatial';
 import type { Auras, Steer } from './types';
@@ -19,6 +21,25 @@ const RAMMERS = new Set(['shark', 'skuf', 'cboss']);
 /** Ячейка = две максимальные «толщины» врага: пары дальше друг от друга не толкаются. */
 const grid = new SpatialHash<Enemy>(2 * Math.max(...Object.values(TYPES).map(t => t.r)));
 
+/** Горение от огнемёта: 1,5 урона за стак раз в полсекунды, перекидывается на соседей. */
+function burn(e: Enemy, dt: number): void {
+  e.burnDur! -= dt; e.burnTick = (e.burnTick ?? .5) - dt;
+  if (e.burnTick > 0) return;
+  e.burnTick = .5;
+  const L = gunLevel('flame');
+  hitEnemy(e, 1.5 * (e.burnS ?? 1) * levelDmg(L) * G.mods.dmg, 0, 0, { noCrit: true, src: 'flame', pierceShield: L >= 5 });
+  G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) - e.hr * .5, vx: rnd(6), vy: -20, life: .4, max: .4, color: pick([P.red, P.vest, P.gold]), size: 1 });
+  for (const o of G.enemies) if (o !== e && !o.dead && !o.alt && !(o.burnDur && o.burnDur > 1) && Math.hypot(o.x - e.x, o.y - e.y) < e.r + o.r + 3) { o.burnS = Math.max(o.burnS ?? 0, 1); o.burnDur = 1.5; o.burnTick ??= .5; }
+  if (e.burnDur! <= 0) { e.burnS = 0; e.burnDur = 0; }
+}
+/** Мины ур. 3: «Принять cookies?» — враги рядом идут к мине. */
+function lure(e: Enemy, s: Steer): void {
+  for (const mn of G.mines) {
+    if (mn.arm > 0) continue;
+    const dx = mn.x - e.x, dy = mn.y - e.y, d = Math.hypot(dx, dy);
+    if (d < 60 && d > 1) { s.vx = dx / d * s.spd; s.vy = dy / d * s.spd; return; }
+  }
+}
 /** Затухание отброса за dt. */
 function decayKnock(e: Enemy, dt: number): void { const k = Math.pow(.02, dt); e.kx *= k; e.ky *= k; }
 
@@ -31,12 +52,12 @@ function charmed(e: Enemy, dt: number): void {
     const ddx = tg.x - e.x, ddy = tg.y - e.y, dd = td || 1, sp = Math.max(e.spd, 40);
     e.face = ddx < 0 ? -1 : 1;
     e.x += (ddx / dd * sp + e.kx) * dt; e.y += (ddy / dd * sp + e.ky) * dt;
-    if (dd < e.r + tg.r + 2 && e.hitCd <= 0) { e.hitCd = .5; e.charm += .001; hitEnemy(tg, 3 + e.dmg * .4, ddx / dd * 60, ddy / dd * 60, true); }
+    if (dd < e.r + tg.r + 2 && e.hitCd <= 0) { e.hitCd = .5; e.charm += .001; hitEnemy(tg, 3 + e.dmg * .4, ddx / dd * 60, ddy / dd * 60, { noCrit: true }); }
   }
   decayKnock(e, dt);
   if (e.charm <= 0) {
     say(e.x, e.y - 24, 'контекст сброшен', P.purple);
-    if (e.charmBoom) { e.charmBoom = false; later(.05, () => { if (!e.dead) { explode(e.x, e.y - 6, 26, 8 * G.mods.dmg, { colors: [P.purple, P.pink, P.white] }); hitEnemy(e, 999, 0, 0, true); } }); }
+    if (e.charmBoom) { e.charmBoom = false; later(.05, () => { if (!e.dead) { explode(e.x, e.y - 6, 26, 8 * G.mods.dmg, { colors: [P.purple, P.pink, P.white] }); hitEnemy(e, 999, 0, 0, { noCrit: true }); } }); }
   }
 }
 
@@ -80,9 +101,13 @@ function affixes(e: Enemy, s: Steer): void {
 export function updateEnemies(dt: number): void {
   const p = G.p;
   const auras: Auras = { guilt: false, timeSlow: false, wobble: false, mogged: false };
+  const mineLure = G.mines.length > 0 && gunLevel('mines') >= 3;
   for (const e of G.enemies) {
     if (e.dead) continue;
     e.t += dt; e.hitCd -= dt; e.cd -= dt; e.flash -= dt; e.atk -= dt; e.slowT -= dt;
+    if (e.vulnT) e.vulnT -= dt;
+    if (e.burnDur && e.burnDur > 0) burn(e, dt);
+    if (e.dead) continue;
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
     if (e.stun > 0) { e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt); continue; }
     if (e.charm > 0) { charmed(e, dt); continue; }
@@ -90,13 +115,15 @@ export function updateEnemies(dt: number): void {
     if (e.type !== 'ballerina' || !(e.spin && e.spin > 0)) e.face = dx < 0 ? -1 : 1;
     let slow = e.slowT > 0 ? .5 : 1;
     if (e.calm > 0) { slow *= .5; e.calm -= dt; }
-    for (const z of G.zones) if ((!z.kind || z.kind === 'pfire') && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) {
+    for (const z of G.zones) if ((!z.kind || z.kind === 'pfire' || z.kind === 'jpeg') && !e.alt && Math.hypot(e.x - z.x, (e.y - z.y) * 1.6) < z.r) {
       if (!z.kind) slow *= .4;
-      if (z.burn || z.kind === 'pfire') { e.burnT = (e.burnT ?? 0) - dt; if (e.burnT <= 0) { e.burnT = .25; hitEnemy(e, (z.kind === 'pfire' ? 3 : 2) * G.mods.dmg, 0, 0, true); } }
+      if (z.kind === 'jpeg') slow *= .5;
+      if (z.burn || z.kind === 'pfire') { e.burnT = (e.burnT ?? 0) - dt; if (e.burnT <= 0) { e.burnT = .25; hitEnemy(e, (z.kind === 'pfire' ? 3 : 2) * G.mods.dmg, 0, 0, { noCrit: true }); } }
     }
     const spd = e.spd * slow;
     const s: Steer = { dt, dx, dy, d, spd, slow, vx: dx / d * spd, vy: dy / d * spd };
     BEHAVIORS[e.type]?.(e, s, auras);
+    if (mineLure && !isBoss(e) && !e.alt) lure(e, s);
     if (e.aff) affixes(e, s);
 
     e.x += (s.vx + e.kx) * dt; e.y += (s.vy + e.ky) * dt;

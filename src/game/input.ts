@@ -1,5 +1,5 @@
 // Ввод, приведённый к одному тику симуляции. Источник — клавиатура/мышь/тач (ui/input.ts), бот или запись реплея.
-export type Action = 'dash' | 'q' | 'e' | 'r' | 'c' | 'v' | 'g' | 'f' | 'alt' | 'next' | 'prev' | { slot: number };
+export type Action = 'dash' | 'q' | 'e' | 'r' | 'c' | 'v' | 'g' | 'f' | 'alt' | 'next' | 'prev' | 'take' | 'reroll' | { slot: number };
 
 export interface TickInput {
   /** направление движения, длина ≤ 1 */

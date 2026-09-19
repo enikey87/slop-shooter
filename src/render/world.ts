@@ -9,7 +9,9 @@ import { vrnd, vpick } from '../engine/rng';
 import { isTouch } from '../platform';
 import { G } from '../game/world';
 import { bodyY, scaleOf, isBoss } from '../game/body';
-import { activeGunId, curSlot, gunPivot } from '../game/weapons';
+import { gunPivot } from '../game/weapons';
+import { activeGunId, gunLevel, weaponNear } from '../game/inventory';
+import { WEAPONS } from '../content/weapons';
 import type { Ally, Enemy, Pickup, Player, Prop } from '../game/state';
 import { SPR, GUNS } from './sprites';
 import { sprOf, enemyFrame } from './enemySprites';
@@ -51,13 +53,13 @@ const blink = (hz: number): boolean => ((G.t * hz) | 0) % 2 === 1;
 
 // ---------- игрок ----------
 function drawGun(p: Player): void {
-  const id = activeGunId(), gun = GUNS[id], gp = gunPivot(p);
+  const id = activeGunId(), gun = GUNS[WEAPONS[id].sprite], gp = gunPivot(p);
   lx.save();
   lx.translate(R(gp.x), R(gp.y)); lx.rotate(p.ang);
   if (p.face < 0) lx.scale(1, -1);
   lx.drawImage(gun.img, -2 - p.recoil, -gun.m);
-  const lvl = id === curSlot().id ? curSlot().lvl : 0;
-  if (lvl >= 3 && blink(6)) { lx.fillStyle = P.white; lx.fillRect(gun.w - 4, -gun.m, 1, 1); }
+  const lvl = gunLevel(id);
+  if (lvl >= 3 && blink(lvl >= 5 ? 10 : 6)) { lx.fillStyle = P.white; lx.fillRect(gun.w - 4, -gun.m, 1, 1); }
   lx.restore();
 }
 const CLING_SPOTS = [[-7, -4], [6, -2], [-3, -13], [8, -11], [0, 3]];
@@ -102,6 +104,7 @@ function drawEnemy(e: Enemy): void {
   if (e.type === 'lirili') { lx.fillStyle = P.white; for (let i = 0; i < 12; i += 3) { const a = -G.t * .8 + i / 12 * TAU; lx.fillRect(R(e.x + Math.cos(a) * 75), R(e.y + Math.sin(a) * 45), 1, 1); } }
   if (e.shield > 0) dotRing(e.x, bodyY(e), e.hr + 2, (e.hr + 2) * .8, 12, 'rgba(255,248,236,.5)', G.t * 3);
   if (e.type === 'ballerina' && e.spin && e.spin > 0) { lx.fillStyle = P.pinkL; for (let i = 0; i < 6; i++) { const a = e.t * 14 + i; lx.fillRect(R(e.x + Math.cos(a) * 9), R(e.y - 12 + Math.sin(a) * 4), 1, 1); } }
+  if (e.burnDur && e.burnDur > 0) { lx.fillStyle = blink(12) ? P.vest : P.gold; for (let i = 0; i < (e.burnS ?? 1) * 2; i++) lx.fillRect(R(e.x + Math.sin(e.t * 9 + i * 2) * e.hr * .7), R(bodyY(e) - e.hr * .6 - ((G.t * 20 + i * 3) % 5)), 1, 1); }
   if (e.stun > 0) dotRing(e.x, bodyY(e) - e.hr - 3, 5, 2, 3, P.gold, G.t * 6);
   if (e.hp < e.max && !isBoss(e) && e.max > 4) {
     const w = e.hr * 2, by = R(e.alt ? e.y - 2 : e.y + 2);
@@ -139,18 +142,21 @@ function gunSheet(id: number): Sheet {
   if (!s) { const g = GUNS[id]; gunSheets.set(id, s = { w: g.img.width, h: g.img.height, n: 1, ax: 0, ay: 0, frames: [g.img], pix: [], tints: new Map(), damagedCache: new Map() }); }
   return s;
 }
+const CLASS_GLOW = [P.gold, P.cyan, P.vest, P.purple];
 const PICKUP_SPR = { ammo: 'ammo', hp: 'grass', up: 'disk', gun: 'gunbox', coffee: 'coffee', blindbox: 'blindbox', dubai: 'dubai', remote: 'remote' } as const;
 function drawPickup(k: Pickup): void {
   if (k.t < 3 && ((k.t * 8) | 0) % 2) return;
   const lift = R(Math.sin(k.bob) * 1.5) - 2;
   drawShadow(k.x, k.y, 5);
-  if (k.type === 'stolen') {
-    const gs = gunSheet(k.gun ?? 0), gi = gs.frames[0], x = R(k.x - gi.width / 2), y = R(k.y + lift - gi.height - 2);
-    if (blink(6)) { const red = tint(gs, 0, P.red); lx.drawImage(red, x - 1, y); lx.drawImage(red, x + 1, y); }
+  if (k.type === 'stolen' || k.type === 'weapon') {
+    const d = WEAPONS[k.gun ?? 'makarov'], gs = gunSheet(d.sprite), gi = gs.frames[0], x = R(k.x - gi.width / 2), y = R(k.y + lift - gi.height - 2);
+    // обводка: красная у отобранной, цвет класса у пушки на полу
+    const glow = k.type === 'stolen' ? (blink(6) ? P.red : null) : CLASS_GLOW[d.cls - 1];
+    if (glow) { const t = tint(gs, 0, glow); for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) lx.drawImage(t, x + ox, y + oy); }
     lx.drawImage(gi, x, y);
     return;
   }
-  const spr = SPR[PICKUP_SPR[k.type]];
+  const spr = SPR[PICKUP_SPR[k.type as keyof typeof PICKUP_SPR]];
   blit(spr, ((G.t * 3) | 0) % spr.n, k.x, k.y + lift, 1);
 }
 
@@ -164,6 +170,10 @@ function drawZones(): void {
     } else if (z.kind === 'foam') {
       lx.globalAlpha = fade * .85;
       for (let i = 0; i < 30; i++) { const ang = i * 2.4, rr = (i % 6) / 6 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6; lx.fillStyle = i % 3 ? P.white : P.gold; lx.fillRect(R(x), R(y) - (((G.t * 3 + i) | 0) % 2), 1 + (i % 2), 1); }
+    } else if (z.kind === 'jpeg') {
+      // артефакты сжатия: мигающие квадраты 2×2
+      lx.globalAlpha = fade * .7;
+      for (let i = 0; i < 18; i++) { const ang = i * 2.4, rr = (i % 6) / 6 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6; lx.fillStyle = [P.cyan, P.pink, P.white, '#3a8fb8'][(i + ((G.t * 6) | 0)) % 4]; lx.fillRect(R(x) & ~1, R(y) & ~1, 2, 2); }
     } else if (z.kind === 'roots') {
       lx.globalAlpha = fade;
       for (let i = 0; i < 26; i++) {
@@ -241,6 +251,19 @@ function collectLabels(): void {
   const p = G.p;
   let stunLabels = 0, charmLabels = 0;
   for (const k of G.pickups) if (k.type === 'stolen' || k.type === 'remote') labels.push({ x: k.x, y: k.y - 20, txt: k.type === 'remote' ? 'ПУЛЬТ' : 'ТВОЯ ПУШКА', color: k.type === 'remote' ? P.gold : P.red });
+  // пушки на полу: имя, и что будет по T
+  const near = weaponNear();
+  for (const k of G.pickups) if (k.type === 'weapon' && k.gun) {
+    const d = WEAPONS[k.gun], own = p.guns[d.cls - 1], lvl = G.gunLvl[k.gun].lvl;
+    let txt = `${d.short} ур.${lvl}`;
+    if (k === near && own && own.id !== k.gun) txt = isTouch ? `ВЗЯТЬ ВМЕСТО ${WEAPONS[own.id].short}` : `T — ВМЕСТО ${WEAPONS[own.id].short}`;
+    labels.push({ x: k.x, y: k.y - 18, txt, color: CLASS_GLOW[d.cls - 1] });
+    if (k === near) labels.push({ x: k.x, y: k.y + 8, txt: d.role, color: P.paper });
+    if (k === near && k.reroll && !isTouch) labels.push({ x: k.x, y: k.y + 18, txt: 'X — перегенерировать', color: P.pink });
+  }
+  // сигма режет мелкий урон: подсказка, когда в руках мелкокалиберное
+  const small = (['makarov', 'mg', 'flame', 'vacuum', 'link', 'keyboard', 'nyan'] as const).includes(activeGunId() as 'mg');
+  if (small) for (const e of G.enemies) if (e.type === 'sigma' && Math.hypot(e.x - p.x, e.y - p.y) < 140) labels.push({ x: e.x, y: bodyY(e) - e.hr - 18, txt: 'мелочь не берёт', color: P.greyL });
   for (const mn of G.mines.slice(-3)) if (mn.arm <= 0) labels.push({ x: mn.x, y: mn.y - 12, txt: 'Принять cookies?', color: P.white });
   for (const e of G.enemies) {
     if (e.charm > 0 && charmLabels++ < 3) labels.push({ x: e.x, y: bodyY(e) - e.hr - 10, txt: 'на твоей стороне', color: P.purple });
@@ -285,7 +308,7 @@ function drawBullets(): void {
       case 'kb': rotated(SPR.kb.frames[0], b.x, b.y, b.rot, -5, -3, true); break;
       case 'slipper': rotated(SPR.slipper.frames[0], b.x, b.y, Math.atan2(b.vy, b.vx), -4, -2); break;
       case 'nyan': blit(SPR.nyan, blink(8) ? 1 : 0, b.x, b.y, b.vx < 0 ? -1 : 1, { scale: b.mega ? 2 : 1 }); break;
-      case 'orbit': rotated(SPR.slipper.frames[0], b.x, b.y, (b.oa ?? 0) + Math.PI / 2, -4, -2); break;
+      case 'orbit': if (b.src === 'keyboard') rotated(SPR.kb.frames[0], b.x, b.y, b.rot, -5, -3, true); else rotated(SPR.slipper.frames[0], b.x, b.y, (b.oa ?? 0) + Math.PI / 2, -4, -2); break;
       case 'token': pixLine(b.x - ux * 5, b.y - uy * 5, b.x, b.y, P.green, 1); lx.fillStyle = P.white; lx.fillRect(R(b.x), R(b.y), 1, 1); break;
       case 'sonic': {
         const w = (b.w ?? 0) | 0;

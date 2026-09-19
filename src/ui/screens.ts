@@ -1,6 +1,7 @@
 // HTML-экраны поверх канваса: старт, перки, пауза, смерть, победа.
 import { P } from '../content/palette';
 import { PERKS } from '../content/perks';
+import { WEAPONS } from '../content/weapons';
 import { EPITAPHS } from '../content/texts.ru';
 import { vpick } from '../engine/rng';
 import { $ } from '../platform';
@@ -13,7 +14,7 @@ import { releaseFire } from './input';
 export interface ScreenHandlers { start(): void }
 
 const hideAll = (): void => { for (const id of ['start', 'over', 'pause', 'perks', 'win']) $(id).hidden = true; };
-const stats = (): string => `Волна ${G.wave} · уровень ${G.p.level} · слопа убрано: ${G.kills} · лайков: ${G.score} · пушек: ${G.p.guns.length}`;
+const stats = (): string => `Волна ${G.wave} · уровень ${G.p.level} · слопа убрано: ${G.kills} · лайков: ${G.score} · ${G.p.guns.filter(Boolean).map(s => `${WEAPONS[s!.id].short} ${G.gunLvl[s!.id].lvl}`).join(' · ')}`;
 
 export function toggleSound(): void {
   Snd.init();

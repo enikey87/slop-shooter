@@ -14,9 +14,10 @@ import { WW, WH } from './game/state';
 import { newGame, step } from './game/sim';
 import { spawnPoint } from './game/arena';
 import { addEnemy, spawnOuroSegments } from './game/spawn';
-import { giveGun } from './game/weapons';
+import { takeWeapon } from './game/inventory';
 import { hitEnemy, damageProp } from './game/combat';
 import type { EnemyId } from './content/enemies';
+import type { WeaponId } from './content/weapons';
 import { initInput, readTick } from './ui/input';
 import { initTouchbar, updateTouchbar } from './ui/touchbar';
 import { initScreens, showPerks, showGameOver, showVictory, togglePause, toggleSound, pickPerk } from './ui/screens';
@@ -86,8 +87,8 @@ declare global { interface Window { __slop: () => typeof G; __slopDebug: unknown
 window.__slop = () => G;
 window.__slopDebug = {
   makeEnemy: (t: EnemyId, x: number, y: number, el: boolean) => addEnemy(t, x, y, el),
-  giveGun, PROPS: () => G.props, spawnSeg: spawnOuroSegments, snd: () => Snd.debug,
-  hit: (e: Parameters<typeof hitEnemy>[0], d: number) => hitEnemy(e, d, 0, 0, true),
+  giveGun: takeWeapon, lvl: (id: WeaponId, l: number) => { G.gunLvl[id].lvl = l; }, PROPS: () => G.props, spawnSeg: spawnOuroSegments, snd: () => Snd.debug,
+  hit: (e: Parameters<typeof hitEnemy>[0], d: number) => hitEnemy(e, d, 0, 0, { noCrit: true }),
   hitProp: damageProp
 };
 

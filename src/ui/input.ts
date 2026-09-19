@@ -23,7 +23,7 @@ export interface InputHandlers {
 }
 
 const KEY_ACTION: Record<string, Action> = {
-  Space: 'dash', KeyQ: 'q', KeyE: 'e', KeyR: 'r', KeyF: 'f', KeyC: 'c', KeyZ: 'alt', KeyV: 'v', KeyG: 'g'
+  Space: 'dash', KeyQ: 'q', KeyE: 'e', KeyR: 'r', KeyF: 'f', KeyC: 'c', KeyZ: 'alt', KeyV: 'v', KeyG: 'g', KeyT: 'take', KeyX: 'reroll'
 };
 
 export function initInput(h: InputHandlers): void {
@@ -39,8 +39,8 @@ export function initInput(h: InputHandlers): void {
     const a = KEY_ACTION[e.code];
     if (a) queue.push(a);
     if (e.code === 'Tab') queue.push(e.shiftKey ? 'prev' : 'next');
-    const dm = /^Digit(\d)$/.exec(e.code);
-    if (dm) queue.push({ slot: dm[1] === '0' ? 9 : +dm[1] - 1 });
+    const dm = /^Digit([1-4])$/.exec(e.code);
+    if (dm) queue.push({ slot: +dm[1] - 1 });
   });
   addEventListener('keyup', e => { keys[e.code] = false; });
   addEventListener('wheel', e => { if (h.playing()) queue.push(e.deltaY > 0 ? 'next' : 'prev'); }, { passive: true });

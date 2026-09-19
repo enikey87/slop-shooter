@@ -1,7 +1,7 @@
 // HUD в полном разрешении: реальность, опыт, оружие, дебаффы, счёт, слоты, способности, босс, баннеры, прицел.
 import { P } from '../content/palette';
 import { enemyDef } from '../content/enemies';
-import { WEAPONS, ALT } from '../content/weapons';
+import { WEAPONS, CLASS_NAME, LEVEL_KILLS, MAX_GUN_LEVEL, type WeaponClass } from '../content/weapons';
 import { PHASE_NAMES } from '../content/bosses';
 import { R, clamp } from '../engine/math';
 import { isTouch, PIX_FONT } from '../platform';
@@ -10,7 +10,7 @@ import { G } from '../game/world';
 import { xpNeed } from '../game/state';
 import { bossFrac } from '../game/body';
 import { DEFAULT_PHASES } from '../game/bosses/phases';
-import { curSlot, activeGunId } from '../game/weapons';
+import { curSlot, activeGunId, gunLevel } from '../game/inventory';
 import { CD } from '../game/abilities';
 import type { AbilityKey } from '../content/perks';
 import { mouse, touch } from '../ui/input';
@@ -51,11 +51,11 @@ function drawStatus(narrow: boolean): number {
   ctx.fillStyle = P.ink; ctx.fillRect(PAD + 44, PAD + 30, xw - 44, 8);
   ctx.fillStyle = P.cyan; ctx.fillRect(PAD + 45, PAD + 31, (xw - 46) * Math.min(1, G.xp / need), 6);
 
-  const slot = curSlot(), id = activeGunId();
-  txt(`${WEAPONS[id].name}${id === slot.id && slot.lvl ? ` x${2 ** slot.lvl}` : ''}`, PAD, PAD + 46, id ? P.cyan : P.paper);
-  txt(id ? `ПАТРОНЫ ${slot.ammo}` : 'ПАТРОНЫ ∞', PAD, PAD + 60, P.muted);
+  const slot = curSlot(), id = activeGunId(), d = WEAPONS[id], mak = id === 'makarov';
+  txt(`${d.name} · УР ${gunLevel(id)}`, PAD, PAD + 46, mak ? P.paper : P.cyan);
+  txt(mak ? `ПАТРОНЫ ∞ · СЕРИЯ ${p.streak % 3}/3` : `ПАТРОНЫ ${Math.ceil(slot.ammo)}`, PAD, PAD + 60, P.muted);
   if (id === slot.id) {
-    const A = ALT[id], cd = slot.altCd ?? 0, ready = cd <= 0 && (!id || slot.ammo >= A.cost);
+    const A = d.alt, cd = slot.altCd ?? 0, ready = cd <= 0 && (mak || slot.ammo >= A.cost);
     txt(`${isTouch ? 'АЛЬТ' : 'ПКМ'}: ${A.name}${cd > 0 ? ' ' + cd.toFixed(1) : A.cost ? ' (' + A.cost + ')' : ''}`, PAD, PAD + 74, ready ? P.cyan : P.dim);
   }
   let sy = PAD + 90;
@@ -116,26 +116,27 @@ function drawAbilities(): number {
   return PAD + ab.length * (aw + gap) - gap;
 }
 
-/** Слоты пушек: справа от способностей, при нехватке места — в несколько рядов снизу вверх. */
+const CLASS_COLOR = [P.gold, P.cyan, P.vest, P.purple];
+/** 4 слота по классам: пушка, уровень (5 делений), опыт до следующего, патроны. */
 function drawGunSlots(narrow: boolean, sy: number, leftEdge: number): void {
-  const p = G.p, n = p.guns.length, gap = 6, W = view.W, H = view.H;
-  let x0: number, width: number, sw: number;
-  if (narrow) { x0 = PAD; width = W - PAD * 2; sw = Math.max(18, Math.min(34, Math.floor(width / n) - gap)); }
-  else { x0 = leftEdge + 24; width = W - PAD - x0; sw = 30; }
-  const cols = Math.max(1, Math.min(n, Math.floor((width + gap) / (sw + gap)))), rows = Math.ceil(n / cols);
-  const rowW = Math.min(n, cols) * (sw + gap) - gap;
-  // на широком экране — по центру свободной области, у нижнего края; на узком — под предупреждениями
-  const bx0 = narrow ? x0 : x0 + Math.max(0, (width - rowW) / 2);
-  const top = narrow ? sy + 4 : H - PAD - 18 - rows * (sw + gap) + gap;
+  const p = G.p, gap = 8, W = view.W, H = view.H, sw = narrow ? 34 : 40, n = p.guns.length;
+  const rowW = n * (sw + gap) - gap;
+  const x0 = narrow ? PAD : Math.max(leftEdge + 24, (W - rowW) / 2), y = narrow ? sy + 4 : H - PAD - 18 - sw;
   p.guns.forEach((s, i) => {
-    const x = bx0 + (i % cols) * (sw + gap), y = top + Math.floor(i / cols) * (sw + gap), sel = i === p.cur, empty = s.id && s.ammo <= 0;
-    box(x, y, sw, sw, sel ? '#3a2d4d' : '#231b30', sel ? P.gold : P.slot);
-    const gi = GUNS[s.id].img, sc = Math.min(2, Math.floor((sw - 6) / gi.width) || 1);
+    const x = x0 + i * (sw + gap), sel = i === p.cur, col = CLASS_COLOR[i];
+    box(x, y, sw, sw, sel ? '#3a2d4d' : '#231b30', sel ? P.gold : s ? col : P.slot);
+    if (!isTouch) txt(String(i + 1), x + 2, y + 2, sel ? P.gold : P.muted, 8);
+    if (!s) { txt(CLASS_NAME[(i + 1) as WeaponClass].slice(0, 3), x + sw / 2, y + sw / 2 - 4, P.slot, 8, 'center'); return; }
+    const d = WEAPONS[s.id], gi = GUNS[d.sprite].img, sc = Math.min(2, Math.floor((sw - 6) / gi.width) || 1), empty = s.id !== 'makarov' && s.ammo <= 0;
     ctx.globalAlpha = empty ? .35 : 1;
     ctx.drawImage(gi, R(x + (sw - gi.width * sc) / 2), R(y + (sw - gi.height * sc) / 2), gi.width * sc, gi.height * sc);
     ctx.globalAlpha = 1;
-    if (!isTouch) txt(String(i === 9 ? 0 : i + 1), x + 2, y + 2, sel ? P.gold : P.muted, 8);
-    if (s.lvl) txt('+' + s.lvl, x + sw - 2, y + sw - 10, P.cyan, 8, 'right');
+    // уровень: 5 делений, нечётные (механики) — золотые
+    const gl = G.gunLvl[s.id];
+    for (let j = 0; j < 5; j++) { ctx.fillStyle = j < gl.lvl ? (j % 2 === 0 && j ? P.gold : col) : P.slot; ctx.fillRect(x + 2 + j * ((sw - 4) / 5), y + sw - 5, (sw - 4) / 5 - 1, 3); }
+    // опыт до следующего уровня
+    if (gl.lvl < MAX_GUN_LEVEL) { const a = LEVEL_KILLS[gl.lvl - 1], b = LEVEL_KILLS[gl.lvl]; ctx.fillStyle = P.white; ctx.fillRect(x + 2, y + sw - 1, (sw - 4) * clamp((gl.xp - a) / (b - a), 0, 1), 1); }
+    if (s.id !== 'makarov') txt(String(Math.ceil(s.ammo)), x + sw / 2, y + sw + 4, empty ? P.red : P.muted, 8, 'center');
     if (s.stolen) { ctx.strokeStyle = P.red; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + sw - 3, y + sw - 3); ctx.moveTo(x + sw - 3, y + 3); ctx.lineTo(x + 3, y + sw - 3); ctx.stroke(); }
   });
 }
@@ -193,9 +194,12 @@ function drawPointer(): void {
   const x = R(mouse.x), y = R(mouse.y), u = Math.max(2, view.S - 1);
   const pts = [[-4, 0], [-3, 0], [3, 0], [4, 0], [0, -4], [0, -3], [0, 3], [0, 4]];
   ctx.fillStyle = P.ink; for (const [ox, oy] of pts) ctx.fillRect(x + ox * u - u / 2 + 1, y + oy * u - u / 2 + 1, u, u);
-  ctx.fillStyle = activeGunId() === 5 ? P.greenL : P.gold; for (const [ox, oy] of pts) ctx.fillRect(x + ox * u - u / 2, y + oy * u - u / 2, u, u);
+  ctx.fillStyle = activeGunId() === 'captcha' ? P.greenL : P.gold; for (const [ox, oy] of pts) ctx.fillRect(x + ox * u - u / 2, y + oy * u - u / 2, u, u);
   // шестой палец на прицеле, когда реальность трещит
   if (G.p.hp <= 60) { ctx.fillStyle = P.skin; ctx.fillRect(x + 3 * u, y - 5 * u, u, 2 * u); }
+  // заряд рельсы и нагрев лазера — полоска под прицелом
+  const gauge = G.p.charge > 0 ? G.p.charge / 1.2 : activeGunId() === 'laser' ? G.p.heat / 2 : activeGunId() === 'mg' ? G.p.spin : 0;
+  if (gauge > 0) { ctx.fillStyle = P.ink; ctx.fillRect(x - 6 * u, y + 6 * u, 12 * u, u + 2); ctx.fillStyle = gauge >= 1 ? P.white : P.purple; ctx.fillRect(x - 6 * u + 1, y + 6 * u + 1, (12 * u - 2) * Math.min(1, gauge), u); }
 }
 
 export function drawHUD(): void {

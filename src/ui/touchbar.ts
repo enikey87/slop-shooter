@@ -2,11 +2,12 @@
 import { isTouch, $ } from '../platform';
 import { R } from '../engine/math';
 import { G } from '../game/world';
-import { curSlot } from '../game/weapons';
+import { curSlot, weaponNear } from '../game/inventory';
+import { WEAPONS } from '../content/weapons';
 import type { Action } from '../game/input';
 import { pushAction } from './input';
 
-const BTN: Record<string, Action> = { alt: 'alt', q: 'q', e: 'e', r: 'r', c: 'c', v: 'v', g: 'g', f: 'f', swap: 'next', dash: 'dash' };
+const BTN: Record<string, Action> = { alt: 'alt', q: 'q', e: 'e', r: 'r', c: 'c', v: 'v', g: 'g', f: 'f', swap: 'next', dash: 'dash', take: 'take' };
 
 export function initTouchbar(): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>('#touchbar button')) {
@@ -36,5 +37,7 @@ export function updateTouchbar(dt: number): void {
   set('f', p.guilt, 'ПОЗДРАВИТЬ');
   set('dash', p.dashCd <= 0, 'КУВЫРОК');
   set('alt', altCd <= 0, altCd > 0 ? `АЛЬТ ${altCd.toFixed(1)}` : 'АЛЬТ');
-  set('swap', p.guns.length > 1, 'ПУШКА');
+  set('swap', p.guns.filter(Boolean).length > 1, 'ПУШКА');
+  const near = weaponNear();
+  set('take', !!near, near ? `ВЗЯТЬ ${WEAPONS[near.gun!].short}` : 'ВЗЯТЬ');
 }

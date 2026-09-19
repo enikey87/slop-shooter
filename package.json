@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/",
-    "balance": "vitest run tools/balance --disableConsoleIntercept"
+    "balance": "vitest run tools/balance --disableConsoleIntercept",
+    "weapons": "vitest run tools/weapons --disableConsoleIntercept"
   },
   "devDependencies": {
     "typescript": "7.0.2",

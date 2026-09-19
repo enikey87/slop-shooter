@@ -8,7 +8,8 @@ import { say, burst } from './fx';
 import { bulletProp } from './arena';
 import { bodyY, isBoss } from './body';
 import { hitEnemy, explode, damageProp, hurt } from './combat';
-import { rocketBoom, bullet } from './weapons';
+import { rocketBoom, bullet, ignite } from './weapons';
+import { gunLevel } from './inventory';
 import { hitPrompt } from './bosses/mama';
 import { eshot } from './enemies/shots';
 import { WW, WH, type Bullet, type EBullet, type Enemy } from './state';
@@ -25,9 +26,17 @@ function grenade(b: Bullet, dt: number): void {
   b.x = b.x0! + (b.tx! - b.x0!) * k; b.y = b.y0! + (b.ty! - 9 - b.y0!) * k; b.z = Math.sin(k * Math.PI) * 26;
   if (k < 1) return;
   b.life = 0;
-  explode(b.tx!, b.ty! - 9, 36, b.dmg, { colors: [P.white, P.green, P.cyan] });
+  explode(b.tx!, b.ty! - 9, 36, b.dmg, { colors: [P.white, P.green, P.cyan], src: 'captcha' });
+  const L = gunLevel('captcha');
   let n = 0;
-  for (const e of G.enemies) if (Math.hypot(e.x - b.tx!, e.y - b.ty!) < 40) { e.stun = isBoss(e) ? .8 : 3; e.stunKind = n++ < 3 ? 'captcha' : ''; }
+  for (const e of G.enemies) if (Math.hypot(e.x - b.tx!, e.y - b.ty!) < 40) {
+    e.stun = isBoss(e) ? .8 : 3; e.stunKind = n++ < 3 ? 'captcha' : '';
+    // оглушённые получают +30% урона; ур. 3 — ещё 2 с не атакуют
+    e.vulnT = e.stun;
+    if (L >= 3) { e.cd = Math.max(e.cd, e.stun + 2); e.hitCd = Math.max(e.hitCd, e.stun + 2); }
+  }
+  // ур. 5: «выберите все светофоры» стирает вражеские снаряды
+  if (L >= 5) G.ebullets = G.ebullets.filter(eb => Math.hypot(eb.x - b.tx!, eb.y - b.ty!) > 45);
   sfx('captcha');
 }
 
@@ -38,12 +47,24 @@ function fly(b: Bullet, dt: number): boolean {
     case 'kb':
       b.t0 = (b.t0 ?? 0) + dt;
       if (!b.ret && b.t0 > .45) { b.ret = true; b.hits = new Set(); }
-      if (b.ret) { const dx = p.x - b.x, dy = p.y - 9 - b.y, d = Math.hypot(dx, dy) || 1; b.vx = dx / d * 230; b.vy = dy / d * 230; if (d < 8) { b.life = 0; return false; } }
+      if (b.ret && !b.midi && gunLevel('keyboard') >= 3) {
+        // MIDI: разворот клавиатуры бьёт звуковыми волнами
+        b.midi = true;
+        for (let i = 0; i < 6; i++) bullet('sonic', b.x, b.y, i / 6 * TAU, 140, b.dmg * .6, { pierce: 999, life: .4, knock: 60, src: 'keyboard' });
+      }
+      if (b.ret) {
+        const dx = p.x - b.x, dy = p.y - 9 - b.y, d = Math.hypot(dx, dy) || 1; b.vx = dx / d * 230; b.vy = dy / d * 230;
+        if (d < 8) {
+          // ур. 5: вернулась — кружит щитом
+          if (gunLevel('keyboard') >= 5) { b.kind = 'orbit'; b.oa = Math.atan2(-dy, -dx); b.hitT = .3; b.life = 3; b.hits = new Set(); b.vx = b.vy = 0; return true; }
+          b.life = 0; return false;
+        }
+      }
       if (random() < .2) G.parts.push({ x: b.x, y: b.y, vx: rnd(20), vy: rnd(20), life: .3, max: .3, color: P.greyL, size: 1 });
       break;
     case 'slipper': {
       let tg: Enemy | null = null, td = 170;
-      for (const e of G.enemies) { if (e.dead || e.charm > 0 || e.disguised) continue; const d = Math.hypot(e.x - b.x, bodyY(e) - b.y); if (d < td) { td = d; tg = e; } }
+      for (const e of G.enemies) { if (e.dead || e.charm > 0 || e.disguised || b.hits.has(e)) continue; const d = Math.hypot(e.x - b.x, bodyY(e) - b.y); if (d < td) { td = d; tg = e; } }
       if (tg) steer(b, Math.atan2(bodyY(tg) - b.y, tg.x - b.x), 6 * dt, 170);
       break;
     }
@@ -51,13 +72,16 @@ function fly(b: Bullet, dt: number): boolean {
       const pc = [P.red, P.vest, P.gold, P.green, P.cyan, P.purple];
       for (let k = 0; k < 3; k++) G.parts.push({ x: b.x - b.vx * .03, y: b.y - 1 + k, vx: 0, vy: 0, life: .35, max: .35, color: pc[(((G.t * 20) | 0) + k) % 6], size: 1 });
       // отскакивает от стен и укрытий
-      if (b.x < 8 || b.x > WW - 8) { b.vx = -b.vx; b.x = clamp(b.x, 8, WW - 8); b.hits = new Set(); }
-      if (b.y < 10 || b.y > WH - 8) { b.vy = -b.vy; b.y = clamp(b.y, 10, WH - 8); b.hits = new Set(); }
+      const L = gunLevel('nyan'), bounce = (): void => { b.hits = new Set(); if (L >= 5) b.pierce++; };
+      if (b.x < 8 || b.x > WW - 8) { b.vx = -b.vx; b.x = clamp(b.x, 8, WW - 8); bounce(); }
+      if (b.y < 10 || b.y > WH - 8) { b.vy = -b.vy; b.y = clamp(b.y, 10, WH - 8); bounce(); }
       const prn = bulletProp(b.x, b.y);
       if (prn) {
         if (bulletProp(b.x - b.vx * dt, b.y)) b.vy = -b.vy; else b.vx = -b.vx;
-        b.x += b.vx * dt * 2; b.y += b.vy * dt * 2; damageProp(prn, 1); sfx('ting', .1); b.hits = new Set();
+        b.x += b.vx * dt * 2; b.y += b.vy * dt * 2; damageProp(prn, 1); sfx('ting', .1); bounce();
       }
+      // ур. 3: радуга замедляет
+      if (L >= 3) for (const e of G.enemies) if (Math.abs(e.x - b.x) < 10 && Math.abs(bodyY(e) - b.y) < 10) e.slowT = Math.max(e.slowT, .6);
       break;
     }
     case 'sonic': b.w = 3 + (.6 - b.life) * 22; break;
@@ -68,6 +92,12 @@ function fly(b: Bullet, dt: number): boolean {
     case 'rocket':
       G.parts.push({ x: b.x - b.vx * .02, y: b.y - b.vy * .02, vx: rnd(8), vy: rnd(8), life: .3, max: .3, color: pick([P.cyan, P.pink, P.white]), size: 2 });
       if (b.life <= 0) { rocketBoom(b); return false; }
+      // ур. 5: доворачивает к ближайшему врагу
+      if (b.src === 'rocket' && gunLevel('rocket') >= 5) {
+        let tg: Enemy | null = null, td = 160;
+        for (const e of G.enemies) { if (e.dead || e.charm > 0 || e.disguised) continue; const d = Math.hypot(e.x - b.x, bodyY(e) - b.y); if (d < td) { td = d; tg = e; } }
+        if (tg) steer(b, Math.atan2(bodyY(tg) - b.y, tg.x - b.x), 2.5 * dt, Math.hypot(b.vx, b.vy));
+      }
       break;
   }
   return true;
@@ -106,12 +136,26 @@ function hitEnemies(b: Bullet): void {
       if (random() < .15) say(e.x, e.y - 30, 'па-де-де', P.pink);
       return;
     }
-    if (b.kind === 'rocket') { b.life = 0; rocketBoom(b); return; }
+    // ракета: прямое попадание ×2 плюс взрыв
+    if (b.kind === 'rocket') { b.life = 0; hitEnemy(e, b.dmg, 0, 0, { src: b.src }); rocketBoom(b); return; }
     const n = Math.hypot(b.vx, b.vy) || 1;
-    hitEnemy(e, b.dmg, b.vx / n * b.knock, b.vy / n * b.knock);
+    let dmg = b.dmg;
+    if (b.streak) {
+      // Макаров: каждое 3-е попадание подряд — контрольный
+      p.streak++;
+      if (b.crit || p.streak % 3 === 0) { dmg *= 2; burst(b.x, b.y, P.gold, 3, 40); }
+    }
+    if (b.src === 'shotgun' && (b.age ?? 0) < .12) dmg *= 1.5; // в упор
+    hitEnemy(e, dmg, b.vx / n * b.knock, b.vy / n * b.knock, { src: b.src });
     if (b.slow) e.slowT = b.slow;
     b.hits.add(e);
-    if (b.kind === 'slipper' && random() < .25) say(e.x, e.y - 22, 'ШЛЁП', P.pink);
+    if (b.kind === 'flame') ignite(e);
+    if (b.kind === 'slipper') {
+      if (random() < .25) say(e.x, e.y - 22, 'ШЛЁП', P.pink);
+      const L = gunLevel('slipper');
+      if (L >= 5) { e.cd = Math.max(e.cd, 2); e.hitCd = Math.max(e.hitCd, 2); }
+      if (L >= 3 && !b.ricochet) { b.ricochet = true; b.pierce++; b.life = Math.max(b.life, 1); }
+    }
     if (b.kind === 'token') {
       // токен рассыпается на три осколка
       const a0 = Math.atan2(b.vy, b.vx);
@@ -126,13 +170,22 @@ function hitEnemies(b: Bullet): void {
 export function updateBullets(dt: number): void {
   for (const b of G.bullets) {
     if (b.kind === 'grenade') { grenade(b, dt); continue; }
+    // свежая пуля сначала проверяет попадание там, где родилась: враг мог стоять вплотную
+    if (!b.age && b.kind !== 'orbit') hitEnemies(b);
+    if (b.life <= 0) continue;
+    b.age = (b.age ?? 0) + dt;
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.rot += dt * 12;
     if (!fly(b, dt)) continue;
     if (hitPrompt(b.x, b.y)) { b.life = 0; burst(b.x, b.y, [P.white, P.cyan], 3, 40); sfx('type', .02); continue; }
     if (!hitProps(b)) continue;
     hitEnemies(b);
   }
-  G.bullets = G.bullets.filter(b => b.life > 0 && b.x > 0 && b.y > 0 && b.x < WW && b.y < WH);
+  G.bullets = G.bullets.filter(b => {
+    const alive = b.life > 0 && b.x > 0 && b.y > 0 && b.x < WW && b.y < WH;
+    // Макаров: промах сбрасывает серию
+    if (!alive && b.streak && !b.hits.size) G.p.streak = 0;
+    return alive;
+  });
   G.enemies = G.enemies.filter(e => !e.dead);
   updateEBullets(dt);
 }

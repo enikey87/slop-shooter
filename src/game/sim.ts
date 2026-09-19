@@ -15,7 +15,8 @@ import { updateBullets } from './bullets';
 import { updatePickups } from './pickups';
 import { openPerks } from './perks';
 import { dash, abilityQ, abilityE, abilityR, abilityC, abilityV, abilityG, congratulate } from './abilities';
-import { altFire, cycleGun, selectGun } from './weapons';
+import { altFire } from './weapons';
+import { cycleGun, selectGun, takeNear, rerollNear } from './inventory';
 import type { Action, TickInput } from './input';
 
 export function newGame(seed: number): GameState {
@@ -40,6 +41,8 @@ function act(a: Action): void {
     case 'alt': altFire(); break;
     case 'next': cycleGun(1); break;
     case 'prev': cycleGun(-1); break;
+    case 'take': takeNear(); break;
+    case 'reroll': rerollNear(); break;
   }
 }
 
