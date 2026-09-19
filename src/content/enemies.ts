@@ -26,13 +26,13 @@ export interface EnemyDef {
 }
 
 export const TYPES = {
-  hand:      { r: 4,  hy: 5,  hr: 5,  hp: 2,   spd: 62, dmg: 7,  score: 1,   cost: 1,  from: 1, w: 6 },
-  cat:       { r: 7,  hy: 7,  hr: 8,  hp: 6,   spd: 34, dmg: 12, score: 3,   cost: 3,  from: 2, w: 3 },
+  hand:      { r: 4,  hy: 5,  hr: 5,  hp: 2,   spd: 62, dmg: 5,  score: 1,   cost: 1,  from: 1, w: 6 },
+  cat:       { r: 7,  hy: 7,  hr: 8,  hp: 6,   spd: 34, dmg: 10, score: 3,   cost: 3,  from: 2, w: 3 },
   kitten:    { r: 5,  hy: 5,  hr: 5,  hp: 2,   spd: 54, dmg: 6,  score: 1 },
   spag:      { r: 5,  hy: 12, hr: 7,  hp: 5,   spd: 30, dmg: 10, score: 4,   cost: 4,  from: 3, w: 2 },
   shark:     { r: 6,  hy: 9,  hr: 8,  hp: 8,   spd: 40, dmg: 14, score: 5,   cost: 4,  from: 3, w: 2.4 },
   ballerina: { r: 5,  hy: 12, hr: 7,  hp: 7,   spd: 44, dmg: 9,  score: 5,   cost: 4,  from: 4, w: 2 },
-  golem:     { r: 9,  hy: 15, hr: 11, hp: 22,  spd: 17, dmg: 22, score: 6,   cost: 6,  from: 4, w: 1.6, heavy: 1 },
+  golem:     { r: 9,  hy: 15, hr: 11, hp: 22,  spd: 17, dmg: 18, score: 6,   cost: 6,  from: 4, w: 1.6, heavy: 1 },
   tung:      { r: 6,  hy: 13, hr: 8,  hp: 14,  spd: 30, dmg: 14, score: 6,   cost: 5,  from: 5, w: 2 },
   grandpa:   { r: 6,  hy: 11, hr: 8,  hp: 12,  spd: 16, dmg: 0,  score: 4,   cost: 5,  from: 5, w: 1 },
   croc:      { r: 8,  hy: 0,  hr: 10, hp: 10,  spd: 38, dmg: 0,  score: 7,   cost: 6,  from: 6, w: 1.8, fly: 18 },
@@ -55,7 +55,7 @@ export const TYPES = {
   oiia:      { r: 5,  hy: 9,  hr: 7,  hp: 14,  spd: 26, dmg: 10, score: 8,   cost: 5,  from: 4, w: 1.4 },
   sigma:     { r: 6,  hy: 14, hr: 8,  hp: 22,  spd: 30, dmg: 14, score: 9,   cost: 6,  from: 5, w: 1.2 },
   quadro:    { r: 5,  hy: 6,  hr: 7,  hp: 7,   spd: 74, dmg: 9,  score: 4,   cost: 5,  from: 4, w: 1.4 },
-  labubu:    { r: 4,  hy: 7,  hr: 6,  hp: 4,   spd: 62, dmg: 0,  score: 3,   cost: 2,  from: 3, w: 1.2 },
+  labubu:    { r: 4,  hy: 7,  hr: 6,  hp: 4,   spd: 62, dmg: 0,  score: 3,   cost: 2,  from: 5, w: 1.2 },
   evasya:    { r: 5,  hy: 9,  hr: 7,  hp: 20,  spd: 0,  dmg: 0,  score: 5 },
   skuf:      { r: 14, hy: 28, hr: 22, hp: 900, spd: 20, dmg: 30, score: 500, boss: 'СКУФ: ГЕННАДИЙ ЧЕРЕЗ 10 ЛЕТ', heavy: 1, phases: [.7, .4] },
   sixseven:  { r: 5,  hy: 12, hr: 7,  hp: 8,   spd: 45, dmg: 8,  score: 6,   cost: 4,  from: 3, w: 1.8 },
@@ -64,10 +64,10 @@ export const TYPES = {
   ouro:      { r: 10, hy: 9,  hr: 13, hp: 300, spd: 44, dmg: 25, score: 300, boss: 'МОДЕЛЬ-КОЛЛАПС: УРОБОРОС', heavy: 1 },
   oseg:      { r: 7,  hy: 8,  hr: 9,  hp: 28,  spd: 0,  dmg: 15, score: 4,   heavy: 1 },
   // архетипы, которых не хватало (по бестиарию Alien Shooter)
-  streamer:  { r: 5,  hy: 11, hr: 7,  hp: 5,   spd: 68, dmg: 0,  score: 5,   cost: 3,  from: 4, w: 1.6 },
-  mona:      { r: 6,  hy: 14, hr: 9,  hp: 14,  spd: 26, dmg: 0,  score: 8,   cost: 6,  from: 7, w: 1 },
-  printer:   { r: 9,  hy: 10, hr: 11, hp: 60,  spd: 0,  dmg: 0,  score: 12,  cost: 8,  from: 6, w: .7, heavy: 1 },
-  shawa:     { r: 6,  hy: 9,  hr: 8,  hp: 16,  spd: 22, dmg: 10, score: 6,   cost: 4,  from: 5, w: 1.2 }
+  streamer:  { r: 5,  hy: 11, hr: 7,  hp: 5,   spd: 68, dmg: 0,  score: 5,   cost: 3,  from: 6, w: 1.6 },
+  mona:      { r: 6,  hy: 14, hr: 9,  hp: 14,  spd: 26, dmg: 0,  score: 8,   cost: 6,  from: 8, w: 1 },
+  printer:   { r: 9,  hy: 10, hr: 11, hp: 60,  spd: 0,  dmg: 0,  score: 12,  cost: 8,  from: 7, w: .7, heavy: 1 },
+  shawa:     { r: 6,  hy: 9,  hr: 8,  hp: 16,  spd: 22, dmg: 10, score: 6,   cost: 4,  from: 6, w: 1.2 }
 } as const satisfies Record<string, EnemyDef>;
 
 export type EnemyId = keyof typeof TYPES;

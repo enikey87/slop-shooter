@@ -177,7 +177,7 @@ export const apostle: Behavior = (e, s) => {
   if (!B || B.dead) { e.master = null; e.noSep = false; s.vx = s.dx / s.d * 40; s.vy = s.dy / s.d * 40; return; }
   e.oa = (e.oa ?? 0) + s.dt * 1.1;
   e.x = B.x + Math.cos(e.oa) * 48; e.y = B.y + Math.sin(e.oa) * 48 * .6; s.vx = s.vy = 0; e.face = Math.cos(e.oa) > 0 ? 1 : -1;
-  if (e.cd <= 0) { e.cd = 3.5 + random(); eshot('amen', e.x, bodyY(e), aimAt(e.x, bodyY(e)), 70, 7, 3.5); }
+  if (e.cd <= 0) { e.cd = 4.5 + random(); eshot('amen', e.x, bodyY(e), aimAt(e.x, bodyY(e)), 65, 5, 3.5); }
 };
 
 /** OIIA-кот: раскручивается, взлетает и падает на игрока. */
@@ -231,7 +231,7 @@ export const labubu: Behavior = (e, s) => {
   e.bite = (e.bite ?? 0) - s.dt;
   if (s.d < 16) e.bite = .2;
   if (s.d < e.r + p.r + 2 && p.dashT <= 0 && p.cling < 5) {
-    e.dead = true; p.cling++;
+    e.dead = true; p.cling++; if (p.cling === 1) p.clingT = 5;
     say(p.x, p.y - 26, p.cling > 2 ? `ЛАБУБУ x${p.cling}` : 'ЛАБУБУ ПРИЦЕПИЛСЯ', P.labP); sfx('meow', .1);
   }
 };
@@ -303,8 +303,9 @@ export const jesus: Behavior = (e) => {
   if (e.cd > 0) return;
   const boss = e.type === 'jboss', ph = e.phase;
   e.cd = boss ? [2.2, 1.9, 1.7][ph] : 3;
-  const n = boss ? 14 : 8, off = random() * TAU, sy = bodyY(e);
-  radial('amen', e.x, sy, n, off, 60, boss ? 12 : 8, 3.5);
+  const n = boss ? [10, 12, 14][ph] : 8, off = random() * TAU, sy = bodyY(e);
+  // первый босс — не стена для новичка: в 1-й фазе кольца реже и мягче, злее к 3-й
+  radial('amen', e.x, sy, n, off, 60, boss ? [7, 9, 11][ph] : 8, 3.5);
   if ((boss && ph >= 1) || (!boss && e.tier >= 1)) later(.3, () => { if (!e.dead) radial('amen', e.x, bodyY(e), n, off + .5 / n * TAU, 75, 12, 3.5); });
   for (const o of G.enemies) if (o !== e && !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < 70) { o.hp = Math.min(o.max, o.hp + o.max * .35); say(o.x, o.y - o.hy * 2 - 4, '+благословение', P.gold); }
   ring(e.x, sy, P.gold, 70, .5);
@@ -327,7 +328,7 @@ export const streamer: Behavior = (e, s) => {
 export function streamerBoom(e: Enemy, k: number): void {
   if (e.fused) return;
   e.fused = true; e.dead = true;
-  explode(e.x, e.y - 6, 26 + 6 * k, 6 * k, { pdmg: 18 * k * (e.tier >= 2 ? 1.25 : 1), colors: [P.vest, P.gold, P.white, P.pink] });
+  explode(e.x, e.y - 6, 26 + 6 * k, 6 * k, { pdmg: 14 * k * (e.tier >= 2 ? 1.25 : 1), colors: [P.vest, P.gold, P.white, P.pink] });
 }
 
 /** Джоконда (снайпер): держит дистанцию, ведёт красную линию прицела, фиксирует её и стреляет сквозь всё. */

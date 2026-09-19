@@ -39,7 +39,7 @@ export function initInput(h: InputHandlers): void {
     const a = KEY_ACTION[e.code];
     if (a) queue.push(a);
     if (e.code === 'Tab') queue.push(e.shiftKey ? 'prev' : 'next');
-    const dm = /^Digit([1-4])$/.exec(e.code);
+    const dm = /^Digit([1-6])$/.exec(e.code);
     if (dm) queue.push({ slot: +dm[1] - 1 });
   });
   addEventListener('keyup', e => { keys[e.code] = false; });

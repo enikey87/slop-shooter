@@ -4,6 +4,7 @@ import { PERKS } from '../content/perks';
 import { pick } from '../engine/rng';
 import { G, hooks, sfx } from './world';
 import { say } from './fx';
+import { wantedPerks } from './inventory';
 
 export function openPerks(): void {
   const avail = PERKS.filter(pk => (G.taken[pk.id] ?? 0) < pk.max);
@@ -11,6 +12,9 @@ export function openPerks(): void {
   G.pendingPerks--;
   G.state = 'perk';
   const choices: typeof avail = [];
+  // перк, которого не хватает до эволюции, всегда среди вариантов
+  const want = avail.find(pk => wantedPerks().includes(pk.id));
+  if (want) choices.push(want);
   while (choices.length < Math.min(3, avail.length)) { const c = pick(avail); if (!choices.includes(c)) choices.push(c); }
   G.perkChoices = choices;
   sfx('level');

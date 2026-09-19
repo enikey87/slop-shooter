@@ -1,6 +1,8 @@
-// Инвентарь: 4 слота по классам, уровни пушек (у типа, не у слота), пушки на полу и ящики с выбором.
+// Инвентарь: 6 слотов (1 — Макаров, 2–6 — любые пушки), уровни пушек (у типа, не у слота), пушки на полу и ящики с выбором.
 import { P } from '../content/palette';
 import { WEAPONS, WEAPON_IDS, LEVEL_KILLS, MAX_GUN_LEVEL, type WeaponId } from '../content/weapons';
+import { EVOLUTIONS } from '../content/evolutions';
+import { PERKS } from '../content/perks';
 import { R, clamp } from '../engine/math';
 import { random, pick } from '../engine/rng';
 import { G, sfx } from './world';
@@ -26,7 +28,9 @@ export const gunLevel = (id: WeaponId): number => G.gunLvl[id].lvl;
 function levelUp(id: WeaponId): void {
   const gl = G.gunLvl[id], d = WEAPONS[id];
   gl.lvl++;
-  const what = gl.lvl === 3 ? d.lv3 : gl.lvl === 5 ? d.lv5 : gl.lvl === 4 ? '+20% урона и скорострельность' : '+20% урона';
+  const ev = EVOLUTIONS[id], evPerk = ev && PERKS.find(pk => pk.id === ev.perk)?.name;
+  // на 5-м уровне подсказываем рецепт эволюции
+  const what = gl.lvl === 3 ? d.lv3 : gl.lvl === 5 ? d.lv5 + (evPerk ? ` · эволюция: перк «${evPerk}» + сундук босса` : '') : gl.lvl === 4 ? '+20% урона и скорострельность' : '+20% урона';
   banner(`${d.short} УР. ${gl.lvl}`, what, 2.2, gl.lvl % 2 ? P.gold : P.cyan);
   sfx('level');
 }
@@ -46,9 +50,27 @@ export function upgradeCurrent(): void {
 }
 
 // ---------- пушки в руки и на пол ----------
+/** Сколько слотов: Макаров + 5 любых. */
+export const SLOTS = 6;
+/** Куда ляжет пушка: такая уже есть → в её слот; есть пустой → в первый пустой;
+ *  иначе вместо пушки в руках (если в руках не Макаров) или вместо самой пустой. */
+export function slotFor(id: WeaponId): number {
+  const g = G.p.guns;
+  const same = g.findIndex(s => s?.id === id);
+  if (same >= 0) return same;
+  const empty = g.findIndex((s, i) => i > 0 && !s);
+  if (empty >= 0) return empty;
+  if (G.p.cur > 0) return G.p.cur;
+  let best = 1, bf = Infinity;
+  for (let i = 1; i < g.length; i++) { const s = g[i]; if (!s) continue; const f = s.ammo / WEAPONS[s.id].box; if (f < bf) { bf = f; best = i; } }
+  return best;
+}
+/** Пушку можно взять, просто наступив: такая уже есть или есть свободный слот. */
+export const takesFreely = (id: WeaponId): boolean => { const s = G.p.guns[slotFor(id)]; return !s || s.id === id; };
+
 /** Положить пушку в её слот. Старая из этого слота падает на пол на 15 секунд. */
 export function takeWeapon(id: WeaponId, ammo?: number): void {
-  const p = G.p, d = WEAPONS[id], idx = d.cls - 1, old = p.guns[idx];
+  const p = G.p, d = WEAPONS[id], idx = slotFor(id), old = p.guns[idx];
   if (old && old.id === id) { old.ammo += ammo ?? d.box; say(p.x, p.y - 26, `+${R(ammo ?? d.box)} ${d.short}`, P.cyan); }
   else {
     if (old) G.pickups.push(weaponPickup(p.x - p.face * 10, p.y + 4, old.id, old.ammo, 15));
@@ -97,6 +119,11 @@ export function pickUpWeapon(k: Pickup): void {
   if (k.group) for (const o of G.pickups) if (o.group === k.group) o.t = 0;
   takeWeapon(k.gun, k.ammo);
 }
+/** Начало забега: сразу выбор из трёх пушек разных классов, чтобы не бегать с одним Макаровым. */
+export function startingOffer(): void {
+  offerWeapons(G.p.x, G.p.y + 34, 3);
+  banner('ВЫБЕРИ ПУШКУ', 'наступи на неё · X — перегенерировать', 3, P.cyan);
+}
 /** Нажали «взять». */
 export function takeNear(): void { const k = weaponNear(); if (k) pickUpWeapon(k); }
 /** Нажали «перегенерировать»: один раз заменить пушки в ящике. */
@@ -106,4 +133,27 @@ export function rerollNear(): void {
   const group = G.pickups.filter(o => o.group === k.group && o.t > 0), ids = rollOffer(group.length, group.map(o => o.gun!));
   group.forEach((o, i) => { if (ids[i]) { o.gun = ids[i]; o.ammo = WEAPONS[ids[i]].box; } o.reroll = false; });
   say(k.x, k.y - 22, 'ПЕРЕГЕНЕРИРОВАНО', P.pink); sfx('inject');
+}
+
+// ---------- эволюции ----------
+export const isEvolved = (id: WeaponId): boolean => !!G.evolved[id];
+/** Имя пушки с учётом эволюции. */
+export const weaponName = (id: WeaponId): string => (G.evolved[id] ? EVOLUTIONS[id]!.name : WEAPONS[id].name);
+/** Пушки в инвентаре, готовые к эволюции: 5-й уровень и нужный перк взят. */
+export function evolvable(): WeaponId[] {
+  return ownedSlots().map(s => s.id).filter(id => { const ev = EVOLUTIONS[id]; return !!ev && !G.evolved[id] && G.gunLvl[id].lvl >= MAX_GUN_LEVEL && (G.taken[ev.perk] ?? 0) > 0; });
+}
+/** Перки, которых не хватает до эволюции пушек 5-го уровня — их чаще предлагаем. */
+export function wantedPerks(): string[] {
+  const out: string[] = [];
+  for (const s of ownedSlots()) { const ev = EVOLUTIONS[s.id]; if (ev && !G.evolved[s.id] && G.gunLvl[s.id].lvl >= MAX_GUN_LEVEL && !(G.taken[ev.perk] ?? 0)) out.push(ev.perk); }
+  return out;
+}
+export function evolve(id: WeaponId): void {
+  const ev = EVOLUTIONS[id];
+  if (!ev || G.evolved[id]) return;
+  G.evolved[id] = true;
+  banner(`ЭВОЛЮЦИЯ: ${ev.name}`, ev.desc, 3, P.pink);
+  sfx('secret');
+  if (id === 'vacuum') G.allies.push({ kind: 'robovac', x: G.p.x + 12, y: G.p.y + 8, t: Infinity, fire: 0, ang: 0, face: 1, talk: 99 });
 }

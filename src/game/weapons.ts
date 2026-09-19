@@ -8,7 +8,8 @@ import { say, later, ring } from './fx';
 import { propAt } from './arena';
 import { bodyY, isBoss } from './body';
 import { hitEnemy, explode, damageProp } from './combat';
-import { activeGunId, curSlot, cycleGun, gunLevel } from './inventory';
+import { activeGunId, curSlot, cycleGun, gunLevel, isEvolved } from './inventory';
+import { hitStop, casing } from './juice';
 import { WW, WH, type Bullet, type BulletKind, type Enemy, type Player } from './state';
 
 export { curSlot, activeGunId, selectGun, cycleGun } from './inventory';
@@ -95,6 +96,9 @@ function rail(a: number, dm: number, L: number, c: number, spread = 0): void {
   const hit = beamSeg(m.x, m.y, Math.cos(a + spread), Math.sin(a + spread), 420, 'rail', () => dmg, 'rail');
   for (const e of hit) {
     if (L >= 5 && k >= 1) { e.stun = Math.max(e.stun, isBoss(e) ? .4 : 1); e.stunKind = 'bonk'; }
+    if (k >= 1) hitStop(.06);
+    // эволюция: попадание бьёт молнией двух ближайших
+    if (isEvolved('rail')) { let n = 0; for (const o of G.enemies) { if (n >= 2 || o === e || o.dead || Math.hypot(o.x - e.x, o.y - e.y) > 70) continue; n++; G.beams.push({ x0: e.x, y0: bodyY(e), x1: o.x, y1: bodyY(o), t: .12, max: .12, type: 'link' }); hitEnemy(o, dmg * .4, 0, 0, { src: 'rail' }); } }
     // ур. 3: токенизация — три осколка от каждого попадания
     if (L >= 3) for (let i = -1; i <= 1; i++) { const aa = a + spread + i * .5; bullet('token', e.x + Math.cos(aa) * 6, bodyY(e) + Math.sin(aa) * 6, aa, 300, 2 * dm, { life: .35, knock: 30, src: 'rail' }).hits.add(e); }
   }
@@ -149,7 +153,7 @@ function vacuum(a: number, dm: number, L: number): void {
   });
   if (eaten) {
     p.vacEaten += eaten;
-    const heavy = p.guns[2];
+    const heavy = p.guns.find(s => s && WEAPONS[s.id].cls === 3) ?? null;
     while (p.vacEaten >= 5) { p.vacEaten -= 5; if (heavy) heavy.ammo += 1; }
     sfx('ting', .05);
   }
@@ -173,7 +177,7 @@ export function detonateMine(mn: { x: number; y: number; dmg: number; dead?: boo
 }
 
 export function rocketBoom(b: Bullet): void {
-  explode(b.x, b.y, 30, b.dmg + 1, { src: 'rocket' });
+  explode(b.x, b.y, isEvolved('rocket') ? 38 : 30, b.dmg + 1, { src: 'rocket' });
   if (gunLevel('rocket') >= 3) G.zones.push({ x: b.x, y: b.y + 4, r: 26, t: 2, max: 2, kind: 'jpeg' });
   if (b.cluster) for (let i = 0; i < 6; i++) { const x = b.x + rnd(30), y = b.y + rnd(20); later(.06 + i * .05, () => explode(x, y, 18, b.dmg * .8, { colors: [P.cyan, P.pink, P.white], src: 'rocket' })); }
 }
@@ -198,7 +202,7 @@ interface FireCtx {
   multi: (fn: (a: number) => void, spread: number) => void;
 }
 const FIRE: Record<WeaponId, (c: FireCtx) => void> = {
-  makarov: ({ dm, L, multi }) => multi(x => { proj('b', x + rnd(.04), 330, 1.2 * dm, { pierce: L >= 3 ? 1 : 0 }).streak = true; }, .12),
+  makarov: ({ dm, L, multi }) => multi(x => { proj('b', x + rnd(.04), 330, 1.5 * dm, { pierce: (L >= 3 ? 1 : 0) + (isEvolved('makarov') ? 1 : 0) }).streak = true; }, .12),
   mg: ({ dm, L, multi }) => {
     const p = G.p, n = ++p.mgN, spread = .13 * (1 - .6 * p.spin) * (p.moving ? 1.6 : 1);
     multi(x => {
@@ -218,7 +222,7 @@ const FIRE: Record<WeaponId, (c: FireCtx) => void> = {
     for (let i = 0; i < back; i++) proj('b', a + Math.PI + (i - (back - 1) / 2) * .13 + rnd(.1), 330, 1.8 * dm, { knock: 90 });
     shake(slug ? 3 : 1.5);
   },
-  rocket: ({ dm, multi }) => { multi(x => proj('rocket', x + rnd(.03), 190, 3 * dm, { life: 1.4 }), .15); shake(1.5); },
+  rocket: ({ dm, multi }) => { multi(x => { proj('rocket', x + rnd(.03), 190, 3 * dm, { life: 1.4 }).cluster = isEvolved('rocket'); }, .15); shake(1.5); },
   rail: ({ a, dm, L, charge }) => rail(a, dm, L, charge),
   captcha: ({ dm }) => { const t = throwTarget(); grenade(t.x, t.y + 9, .55, 4 * dm); },
   slipper: ({ dm, multi }) => multi(x => proj('slipper', x + rnd(.2), 170, 4 * dm, { life: 2.2, knock: 120 }), .3),
@@ -237,10 +241,12 @@ export function gunDmg(id: WeaponId): number {
 const NO_FLASH = new Set<WeaponId>(['laser', 'rail', 'link', 'vacuum', 'mines']);
 const HEAVY_RECOIL = new Set<WeaponId>(['rocket', 'rail', 'shotgun']);
 const LOOP_SFX = new Set<WeaponId>(['laser', 'flame', 'vacuum']);
+/** У кого вылетают гильзы. */
+const CASINGS = new Set<WeaponId>(['makarov', 'mg', 'shotgun']);
 
 function shoot(charge = 0): void {
   const p = G.p, slot = curSlot(), id = activeGunId(), d = WEAPONS[id], L = gunLevel(id);
-  p.fireT = d.rate / levelRate(L) / G.mods.rate * (p.guilt ? 2 : 1) * (p.timeSlow ? 1.4 : 1) / (p.sugar > 0 ? 1.6 : 1) / (id === 'mg' ? 1 + p.spin : 1);
+  p.fireT = d.rate / levelRate(L) / G.mods.rate * (p.guilt ? 2 : 1) * (p.timeSlow ? 1.4 : 1) / (p.sugar > 0 ? 1.6 : 1) / (id === 'mg' ? 1 + p.spin * (isEvolved('mg') ? 2 : 1) : 1);
   if (id !== 'makarov' && id === slot.id) {
     slot.ammo -= d.perShot;
     if (slot.ammo <= 0) { slot.ammo = 0; say(p.x, p.y - 26, 'ПАТРОНЫ КОНЧИЛИСЬ', P.pink); cycleGun(1); }
@@ -249,20 +255,21 @@ function shoot(charge = 0): void {
   FIRE[id]({ a, dm: gunDmg(id), L, charge, multi: (fn, spread) => { for (let i = 0; i < n; i++) fn(a + (i - (n - 1) / 2) * spread); } });
   sfx(d.sfx, LOOP_SFX.has(id) ? .06 : .025);
   p.recoil = HEAVY_RECOIL.has(id) ? 3 : 1.5;
-  if (!NO_FLASH.has(id)) { const m = muzzle(a); G.parts.push({ x: m.x, y: m.y, vx: 0, vy: 0, life: .05, max: .05, color: P.white, size: 3, flash: true }); }
+  if (!NO_FLASH.has(id)) { const m = muzzle(a); G.parts.push({ x: m.x, y: m.y, vx: 0, vy: 0, life: .05, max: .05, color: P.white, size: HEAVY_RECOIL.has(id) ? 5 : 3, flash: true }); }
+  if (CASINGS.has(id)) { const gp = gunPivot(p); casing(gp.x, gp.y, a, p.face); }
 }
 
 /** Курок на этом тике: раскрутка пулемёта, нагрев лазера, заряд рельсы, обычная стрельба. */
 export function updateTrigger(dt: number, held: boolean): void {
   const p = G.p, id = activeGunId(), canFire = p.dashT <= 0;
-  if (id === 'mg' && held && canFire) { p.spin = Math.min(1, p.spin + dt / .6); p.spinHold = gunLevel('mg') >= 5 ? 2 : 0; }
+  if (id === 'mg' && held && canFire) { p.spin = Math.min(1, p.spin + dt / .6); p.spinHold = isEvolved('mg') ? 1e9 : gunLevel('mg') >= 5 ? 2 : 0; }
   else if (p.spinHold > 0) p.spinHold -= dt;
   else p.spin = Math.max(0, p.spin - dt * 2);
   if (!(id === 'laser' && held)) p.heat = Math.max(0, p.heat - dt * (gunLevel('laser') >= 5 ? .5 : 2));
   p.fireT -= dt;
   if (id === 'rail') {
     if (held && canFire && p.fireT <= 0) {
-      p.charge = Math.min(1.2, p.charge + dt);
+      p.charge = Math.min(1.2, p.charge + dt * (isEvolved('rail') ? 2 : 1));
       if (random() < .5) { const m = muzzle(p.ang); G.parts.push({ x: m.x + rnd(3), y: m.y + rnd(3), vx: 0, vy: 0, life: .15, max: .15, color: p.charge >= 1.2 ? P.white : P.purple, size: 1 }); }
     } else if (!held && p.charge > 0) { shoot(Math.max(.3, p.charge)); p.charge = 0; }
     return;
@@ -324,7 +331,7 @@ export function altFire(): void {
 
 /** Поджечь врага (огнемёт): +1 стак горения, до 3. */
 export function ignite(e: Enemy, stacks = 1, dur = 3): void {
-  e.burnS = Math.min(3, (e.burnS ?? 0) + stacks);
+  e.burnS = Math.min(isEvolved('flame') ? 5 : 3, (e.burnS ?? 0) + stacks);
   e.burnDur = Math.max(e.burnDur ?? 0, dur);
   e.burnTick ??= .5;
 }

@@ -1,7 +1,8 @@
 // HTML-экраны поверх канваса: старт, перки, пауза, смерть, победа.
 import { P } from '../content/palette';
 import { PERKS } from '../content/perks';
-import { WEAPONS } from '../content/weapons';
+import { WEAPONS, type WeaponId } from '../content/weapons';
+import { EVOLUTIONS, type EvolutionDef } from '../content/evolutions';
 import { EPITAPHS } from '../content/texts.ru';
 import { vpick } from '../engine/rng';
 import { $ } from '../platform';
@@ -26,7 +27,8 @@ export function togglePause(): void {
   if (G.state === 'play') {
     G.state = 'pause'; Snd.music(false);
     const names = Object.entries(G.taken).map(([id, n]) => `${PERKS.find(pk => pk.id === id)?.name ?? id}${n > 1 ? ' x' + n : ''}`);
-    $('pause-perks').textContent = names.length ? `Перки: ${names.join(' · ')}` : 'Перков пока нет. Убивай слоп, копи лайки.';
+    const recipes = (Object.entries(EVOLUTIONS) as [WeaponId, EvolutionDef][]).map(([id, ev]) => `${WEAPONS[id].short} ур.5 + ${PERKS.find(pk => pk.id === ev.perk)?.name} → ${ev.name}${G.evolved[id] ? ' ✓' : ''}`);
+    $('pause-perks').textContent = (names.length ? `Перки: ${names.join(' · ')}` : 'Перков пока нет. Убивай слоп, копи лайки.') + `\n\nЭволюции (сундук босса): ${recipes.join(' · ')}`;
     $('pause').hidden = false; $('btn-resume').focus();
   } else if (G.state === 'pause') { G.state = 'play'; $('pause').hidden = true; Snd.music(true); }
 }

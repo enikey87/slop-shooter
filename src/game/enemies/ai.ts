@@ -9,7 +9,7 @@ import { bodyY, scaleOf, isBoss } from '../body';
 import { propAt, pushOut } from '../arena';
 import { hitEnemy, hurt, explode, damageProp } from '../combat';
 import { checkPhase } from '../bosses/phases';
-import { gunLevel } from '../inventory';
+import { gunLevel, isEvolved } from '../inventory';
 import { levelDmg } from '../../content/weapons';
 import { TIERS } from '../../content/tiers';
 import { BEHAVIORS } from './registry';
@@ -26,11 +26,12 @@ const grid = new SpatialHash<Enemy>(2 * Math.max(...Object.values(TYPES).map(t =
 function burn(e: Enemy, dt: number): void {
   e.burnDur! -= dt; e.burnTick = (e.burnTick ?? .5) - dt;
   if (e.burnTick > 0) return;
-  e.burnTick = .5;
+  const evo = isEvolved('flame');
+  e.burnTick = evo ? .35 : .5;
   const L = gunLevel('flame');
   hitEnemy(e, 1.5 * (e.burnS ?? 1) * levelDmg(L) * G.mods.dmg, 0, 0, { noCrit: true, src: 'flame', pierceShield: L >= 5 });
   G.parts.push({ x: e.x + rnd(e.hr), y: bodyY(e) - e.hr * .5, vx: rnd(6), vy: -20, life: .4, max: .4, color: pick([P.red, P.vest, P.gold]), size: 1 });
-  for (const o of G.enemies) if (o !== e && !o.dead && !o.alt && !(o.burnDur && o.burnDur > 1) && Math.hypot(o.x - e.x, o.y - e.y) < e.r + o.r + 3) { o.burnS = Math.max(o.burnS ?? 0, 1); o.burnDur = 1.5; o.burnTick ??= .5; }
+  for (const o of G.enemies) if (o !== e && !o.dead && !o.alt && !(o.burnDur && o.burnDur > 1) && Math.hypot(o.x - e.x, o.y - e.y) < e.r + o.r + (evo ? 15 : 3)) { o.burnS = Math.max(o.burnS ?? 0, 1); o.burnDur = 1.5; o.burnTick ??= .5; }
   if (e.burnDur! <= 0) { e.burnS = 0; e.burnDur = 0; }
 }
 function breakArmor(e: Enemy): void {

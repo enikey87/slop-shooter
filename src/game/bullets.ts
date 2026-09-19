@@ -9,7 +9,8 @@ import { bulletProp } from './arena';
 import { bodyY, isBoss } from './body';
 import { hitEnemy, explode, damageProp, hurt } from './combat';
 import { rocketBoom, bullet, ignite } from './weapons';
-import { gunLevel } from './inventory';
+import { gunLevel, isEvolved } from './inventory';
+import { spark } from './juice';
 import { hitPrompt } from './bosses/mama';
 import { eshot } from './enemies/shots';
 import { WW, WH, type Bullet, type EBullet, type Enemy } from './state';
@@ -33,6 +34,8 @@ function grenade(b: Bullet, dt: number): void {
     e.stun = isBoss(e) ? .8 : 3; e.stunKind = n++ < 3 ? 'captcha' : '';
     // оглушённые получают +30% урона; ур. 3 — ещё 2 с не атакуют
     e.vulnT = e.stun;
+    // эволюция reCAPTCHA v∞: оглушённые переходят на твою сторону
+    if (isEvolved('captcha') && !isBoss(e)) { e.charm = Math.max(e.charm, e.stun + 4); e.disguised = false; }
     if (L >= 3) { e.cd = Math.max(e.cd, e.stun + 2); e.hitCd = Math.max(e.hitCd, e.stun + 2); }
   }
   // ур. 5: «выберите все светофоры» стирает вражеские снаряды
@@ -72,7 +75,11 @@ function fly(b: Bullet, dt: number): boolean {
       const pc = [P.red, P.vest, P.gold, P.green, P.cyan, P.purple];
       for (let k = 0; k < 3; k++) G.parts.push({ x: b.x - b.vx * .03, y: b.y - 1 + k, vx: 0, vy: 0, life: .35, max: .35, color: pc[(((G.t * 20) | 0) + k) % 6], size: 1 });
       // отскакивает от стен и укрытий
-      const L = gunLevel('nyan'), bounce = (): void => { b.hits = new Set(); if (L >= 5) b.pierce++; };
+      const L = gunLevel('nyan'), bounce = (): void => {
+        b.hits = new Set(); if (L >= 5) b.pierce++;
+        // эволюция: на отскоке кот делится на котят (котята уже не делятся)
+        if (isEvolved('nyan') && (b.bounces ?? 0) < 2 && !b.mega) { b.bounces = (b.bounces ?? 0) + 1; bullet('nyan', b.x, b.y, Math.atan2(b.vy, b.vx) + (random() - .5) * 1.6, 150, b.dmg * .5, { pierce: 2, life: 1.5, knock: 30, src: 'nyan' }).bounces = 2; }
+      };
       if (b.x < 8 || b.x > WW - 8) { b.vx = -b.vx; b.x = clamp(b.x, 8, WW - 8); bounce(); }
       if (b.y < 10 || b.y > WH - 8) { b.vy = -b.vy; b.y = clamp(b.y, 10, WH - 8); bounce(); }
       const prn = bulletProp(b.x, b.y);
@@ -143,10 +150,11 @@ function hitEnemies(b: Bullet): void {
     if (b.streak) {
       // Макаров: каждое 3-е попадание подряд — контрольный
       p.streak++;
-      if (b.crit || p.streak % 3 === 0) { dmg *= 2; burst(b.x, b.y, P.gold, 3, 40); }
+      if (b.crit || p.streak % (isEvolved('makarov') ? 2 : 3) === 0) { dmg *= 2; burst(b.x, b.y, P.gold, 3, 40); }
     }
     if (b.src === 'shotgun' && (b.age ?? 0) < .12) dmg *= 1.5; // в упор
     hitEnemy(e, dmg, b.vx / n * b.knock, b.vy / n * b.knock, { src: b.src });
+    if (b.kind !== 'flame') spark(b.x, b.y, dmg > b.dmg);
     if (b.slow) e.slowT = b.slow;
     b.hits.add(e);
     if (b.kind === 'flame') ignite(e);

@@ -6,7 +6,8 @@ import { say, burst } from './fx';
 import { pushOut } from './arena';
 import { bodyY } from './body';
 import { hitEnemy } from './combat';
-import { bullet } from './weapons';
+import { bullet, gunDmg } from './weapons';
+import { ownedSlots } from './inventory';
 import type { Ally, Enemy } from './state';
 
 function target(al: Ally): Enemy | null {
@@ -39,9 +40,24 @@ function gunner(al: Ally, tg: Enemy): void {
   sfx(turret ? 'minigun' : shotgun ? 'shotgun' : 'pistol', .08);
 }
 
+/** Робот-пылесос (эволюция пылесоса): сам ездит к слопу, бьёт наездом, жрёт вражеские пули, подвозит лут. */
+function robovac(al: Ally, dt: number): void {
+  const p = G.p;
+  if (!ownedSlots().some(s => s.id === 'vacuum')) { al.t = 0; return; }
+  let tg: Enemy | null = null, td = 160;
+  for (const e of G.enemies) { if (e.dead || e.charm > 0 || e.alt > 10 || e.disguised) continue; const d = Math.hypot(e.x - al.x, e.y - al.y); if (d < td) { td = d; tg = e; } }
+  const tx = tg ? tg.x : p.x + 14, ty = tg ? tg.y : p.y + 10, dx = tx - al.x, dy = ty - al.y, d = Math.hypot(dx, dy) || 1;
+  if (d > 4) { al.x += dx / d * 75 * dt; al.y += dy / d * 75 * dt; al.face = dx < 0 ? -1 : 1; }
+  if (tg && d < tg.r + 6 && al.fire <= 0) { al.fire = .3; hitEnemy(tg, 5 * gunDmg('vacuum'), dx / d * 40, dy / d * 40, { src: 'vacuum' }); }
+  G.ebullets = G.ebullets.filter(b => b.kind === 'peel' || b.kind === 'bottle' || Math.hypot(b.x - al.x, b.y - al.y) > 18);
+  for (const k of G.pickups) if (k.type !== 'weapon' && k.type !== 'evo' && Math.hypot(k.x - al.x, k.y - al.y) < 50) { const kx = p.x - k.x, ky = p.y - k.y, kd = Math.hypot(kx, ky) || 1; k.x += kx / kd * 90 * dt; k.y += ky / kd * 90 * dt; }
+  al.r = 4; pushOut(al);
+}
+
 export function updateAllies(dt: number): void {
   for (const al of G.allies) {
     al.t -= dt; al.fire -= dt; al.talk -= dt;
+    if (al.kind === 'robovac') { robovac(al, dt); continue; }
     const tg = target(al);
     if (al.kind === 'dog') dog(al, tg, dt);
     else if (tg) gunner(al, tg);

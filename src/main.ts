@@ -14,7 +14,7 @@ import { WW, WH } from './game/state';
 import { newGame, step } from './game/sim';
 import { spawnPoint } from './game/arena';
 import { addEnemy, spawnOuroSegments } from './game/spawn';
-import { takeWeapon } from './game/inventory';
+import { takeWeapon, startingOffer } from './game/inventory';
 import { hitEnemy, damageProp } from './game/combat';
 import type { EnemyId } from './content/enemies';
 import type { WeaponId } from './content/weapons';
@@ -45,6 +45,7 @@ function startRun(): void {
   newGame(freshSeed());
   syncView();
   buildFloor();
+  startingOffer();
   Snd.regular(0); Snd.bossMode(false); Snd.music(true);
 }
 

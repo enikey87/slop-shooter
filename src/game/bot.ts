@@ -2,7 +2,7 @@
 import { G } from './world';
 import { bodyY, isBoss } from './body';
 import { WEAPONS, type WeaponId } from '../content/weapons';
-import { activeGunId } from './inventory';
+import { activeGunId, slotFor } from './inventory';
 
 /** Комфортная дистанция для ближнебойных пушек. */
 const KEEP: Partial<Record<WeaponId, number>> = { flame: 40, shotgun: 45, vacuum: 60 };
@@ -45,7 +45,7 @@ export function botInput(o: BotOpts = {}): TickInput {
   const w = G.pickups.find(k => k.type === 'weapon');
   if (w && (!tg || td > 70)) { mx = w.x - p.x; my = w.y - p.y; }
   if (w && Math.hypot(w.x - p.x, w.y - p.y) < 14) {
-    const own = p.guns[WEAPONS[w.gun!].cls - 1];
+    const own = p.guns[slotFor(w.gun!)];
     if (own && own.ammo < WEAPONS[own.id].box * .25) actions.push('take');
   }
   // самый тяжёлый слот с патронами

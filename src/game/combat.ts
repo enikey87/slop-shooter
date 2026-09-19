@@ -11,7 +11,8 @@ import { addEnemy } from './spawn';
 import { mkPickup } from './pickups';
 import { xpNeed, WW, WH, type Enemy, type Prop } from './state';
 import type { WeaponId } from '../content/weapons';
-import { gunKill, gunLevel, offerWeapons } from './inventory';
+import { gunKill, gunLevel, offerWeapons, evolvable } from './inventory';
+import { comboKill, hitStop } from './juice';
 import { streamerBoom, gas } from './enemies/behaviors';
 
 export interface HitOpts {
@@ -56,6 +57,7 @@ export interface ExplodeOpts { pdmg?: number; colors?: readonly string[]; props?
 export function explode(x: number, y: number, rad: number, dmg: number, o: ExplodeOpts = {}): void {
   const colors = o.colors ?? [P.cyan, P.pink, P.gold, P.purple, P.white];
   G.shake = Math.max(G.shake, rad > 30 ? 6 : 4);
+  if (rad >= 36) hitStop(.03);
   for (let i = 0; i < 30; i++) {
     const a = random() * TAU, s = 30 + random() * 90;
     G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s * .7, life: .3 + random() * .5, max: .8, color: pick(colors), size: 2 + ((random() * 3) | 0) });
@@ -123,7 +125,10 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
   e.dead = true;
   const T = enemyDef(e.type), boss = !!T.boss && !e.decoy;
   if (e.decoy) say(e.x, e.y - 40, 'ГАЛЛЮЦИНАЦИЯ', P.purple);
-  const gain = e.score * G.mods.likes * (peaceful ? 2 : 1);
+  const gain = e.score * G.mods.likes * (peaceful ? 2 : 1) * comboKill();
+  // стоп-кадр и хлопок: босс — долгий, элитка и 8K — короткий
+  if (boss) hitStop(.3); else if (e.elite || e.tier >= 2) hitStop(.04);
+  if (!peaceful && !boss) ring(e.x, bodyY(e), P.white, 6 + e.r, .12);
   G.kills++; G.score += R(gain); G.xp += gain;
   if (src) gunKill(src);
   // наградной Макаров: убийства им заряжают блэкаут вдвое быстрее
@@ -157,6 +162,9 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
     if (e.type === 'skboss') for (const q of G.props.slice()) if (q.kind === 'toiletprop') destroyProp(q);
     G.pickups.push(mkPickup(e.x - 14, e.y, 'up'), mkPickup(e.x + 14, e.y, 'up'), mkPickup(e.x, e.y - 12, 'hp'));
     offerWeapons(e.x, e.y + 24, 3);
+    // сундук эволюции, если есть пушка 5-го уровня с нужным перком
+    const evo = evolvable()[0];
+    if (evo) G.pickups.push({ ...mkPickup(e.x, e.y - 26, 'evo'), gun: evo, t: 9999 });
     banner('БОСС ПОВЕРЖЕН', pick(['I’m sorry, I can’t continue', 'модель снята с продакшена', 'ошибка 500: босс не найден']), 2.4, P.gold);
     G.shake = 10;
     return;
@@ -170,15 +178,17 @@ function dropLoot(e: Enemy): void {
   if (random() < .012 * m) { G.pickups.push(mkPickup(e.x, e.y, 'blindbox')); return; }
   if (random() < .007 * m) { G.pickups.push(mkPickup(e.x, e.y, 'dubai')); return; }
   if (r < .025 * m * big) G.pickups.push(mkPickup(e.x, e.y, 'up'));
-  else if (r < (.025 + .02) * m * big) G.pickups.push(mkPickup(e.x, e.y, 'gun'));
-  else if (r < (.045 * m + .09) * big) G.pickups.push(mkPickup(e.x, e.y, 'ammo'));
-  else if (r < (.045 * m + .135) * big) G.pickups.push(mkPickup(e.x, e.y, 'hp'));
+  else if (r < (.025 + .03) * m * big) G.pickups.push(mkPickup(e.x, e.y, 'gun'));
+  else if (r < (.055 * m + .11) * big) G.pickups.push(mkPickup(e.x, e.y, 'ammo'));
+  else if (r < (.055 * m + .155) * big) G.pickups.push(mkPickup(e.x, e.y, 'hp'));
 }
 
 export function hurt(n: number, srcTxt?: string | null): void {
   const p = G.p;
   if (p.inv > 0 || p.dashT > 0 || G.state !== 'play') return;
-  p.hp -= n; p.inv = .35; p.hit = .1; G.shake = Math.max(G.shake, 3.5); G.flash = .25;
+  // полсекунды неуязвимости: толпа рук не «съедает» за один миг
+  p.hp -= n; p.inv = .5; p.hit = .1;
+  if (n >= 15) hitStop(.06); G.shake = Math.max(G.shake, 3.5); G.flash = .25;
   say(p.x, p.y - 22, srcTxt || `-${Math.round(n)}% реальности`, P.pink);
   sfx('hurt', .08);
   checkDeath();

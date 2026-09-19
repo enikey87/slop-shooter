@@ -8,7 +8,7 @@ import { say, banner, burst, later } from './fx';
 import { propAt, spawnPoint } from './arena';
 import { destroyProp } from './combat';
 import { addEnemy, spawnPortal } from './spawn';
-import { ownedSlots, offerWeapons, pickUpWeapon, upgradeCurrent } from './inventory';
+import { ownedSlots, offerWeapons, pickUpWeapon, upgradeCurrent, slotFor, takesFreely, evolve } from './inventory';
 import { WW, WH, type Pickup, type PickupType } from './state';
 
 export function mkPickup(x: number, y: number, type: PickupType): Pickup {
@@ -33,10 +33,10 @@ export function updatePickups(dt: number): void {
 
 /** Наступил на пушку: в пустой слот (или та же пушка) — берём сразу, иначе ждём T. */
 function touchWeapon(k: Pickup): void {
-  const slot = G.p.guns[WEAPONS[k.gun!].cls - 1];
+  const slot = G.p.guns[slotFor(k.gun!)];
   // своя же пустая пушка на полу — просто убираем
   if (slot && slot.id === k.gun && !k.ammo) { k.t = 0; return; }
-  if (!slot || slot.id === k.gun) pickUpWeapon(k);
+  if (takesFreely(k.gun!)) pickUpWeapon(k);
 }
 
 /** Доли ящика патронов между слотами 2–4. */
@@ -101,6 +101,7 @@ function collect(k: Pickup): void {
     }
     case 'up': upgradeCurrent(); break;
     case 'weapon': break;
+    case 'evo': if (k.gun) evolve(k.gun); break;
   }
   burst(k.x, k.y - 5, k.type === 'up' || k.type === 'gun' ? P.cyan : k.type === 'ammo' ? P.gold : P.green, 14, 60);
 }

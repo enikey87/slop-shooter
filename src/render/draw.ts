@@ -2,7 +2,7 @@
 import { P } from '../content/palette';
 import { R } from '../engine/math';
 import { vrnd } from '../engine/rng';
-import { PIX_FONT } from '../platform';
+import { PIX_FONT, isTouch } from '../platform';
 import { G } from '../game/world';
 import { ctx, low, view } from './canvas';
 import { drawWorld, labels } from './world';
@@ -32,7 +32,9 @@ export function draw(): void {
   drawWorld();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  let sx = R(vrnd(G.shake)) * S, sy = R(vrnd(G.shake)) * S;
+  // тряска с потолком: иначе на поздних волнах экран не читается
+  const sh = Math.min(G.shake, 7);
+  let sx = R(vrnd(sh)) * S, sy = R(vrnd(sh)) * S;
   if (p.hp < 20 && playing) { sx += R(Math.sin(G.t * 2.3) * 2) * S; sy += R(Math.cos(G.t * 1.7) * 1.5) * S; }
   ctx.fillStyle = P.ink; ctx.fillRect(0, 0, W, H);
   ctx.drawImage(low, sx, sy, VW * S, VH * S);
@@ -58,6 +60,12 @@ export function draw(): void {
     ctx.fillStyle = t.color; ctx.fillText(t.txt, x, y);
   }
   ctx.globalAlpha = 1;
+  // подсказка прямо над героем: лабубу снимаются кувырком
+  if (p.cling && playing && ((G.t * 3) | 0) % 2) {
+    const [x, y] = toScreen(p.x, p.y - 32);
+    ctx.font = `${S >= 4 ? 12 : 8}px ${PIX_FONT}`; ctx.fillStyle = P.ink; ctx.fillText(isTouch ? 'КУВЫРОК — СТРЯХНУТЬ' : 'ПРОБЕЛ — СТРЯХНУТЬ', x + 1, y + 1);
+    ctx.fillStyle = P.labP; ctx.fillText(isTouch ? 'КУВЫРОК — СТРЯХНУТЬ' : 'ПРОБЕЛ — СТРЯХНУТЬ', x, y);
+  }
   drawOverlays();
   if (G.state !== 'attract') drawHUD();
 }

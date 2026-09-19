@@ -11,14 +11,17 @@ import { start, run } from './helpers';
 function hold(t: number): void { for (let i = 0; i < t / STEP; i++) updateTrigger(STEP, true); updateTrigger(STEP, false); }
 
 describe('оружие', () => {
-  it('4 слота по классам, каждый класс в своём слоте', () => {
+  it('6 слотов: Макаров + 5 любых; полный инвентарь меняет пушку в руках', () => {
     start(5);
-    expect(G.p.guns.length).toBe(4);
-    for (const id of WEAPON_IDS) if (id !== 'makarov') {
-      takeWeapon(id);
-      expect(G.p.guns[WEAPONS[id].cls - 1]?.id).toBe(id);
-    }
-    expect(G.p.guns[0]?.id).toBe('makarov');
+    expect(G.p.guns.length).toBe(6);
+    for (const id of ['mg', 'flame', 'laser', 'rail', 'nyan'] as const) takeWeapon(id);
+    expect(G.p.guns.map(s => s?.id)).toEqual(['makarov', 'mg', 'flame', 'laser', 'rail', 'nyan']);
+    G.p.cur = 3;
+    takeWeapon('mines');
+    expect(G.p.guns[3]?.id).toBe('mines');
+    expect(G.pickups.some(k => k.type === 'weapon' && k.gun === 'laser')).toBe(true);
+    takeWeapon('mg');
+    expect(G.p.guns.filter(s => s?.id === 'mg').length).toBe(1);
   });
   it('каждая пушка стреляет, тратит патроны и альт уходит на перезарядку', () => {
     for (const id of WEAPON_IDS) {
@@ -45,18 +48,17 @@ describe('оружие', () => {
     takeWeapon('mg');
     expect(G.gunLvl.mg.lvl).toBe(3);
   });
-  it('ящик предлагает две пушки разных классов; взял одну — вторая исчезает; старая падает на пол', () => {
+  it('ящик предлагает две пушки разных классов; взял одну — вторая исчезает', () => {
     start(8);
     takeWeapon('mg');
     offerWeapons(G.p.x, G.p.y, 2);
     const offer = G.pickups.filter(k => k.type === 'weapon');
     expect(offer.length).toBe(2);
     expect(WEAPONS[offer[0].gun!].cls).not.toBe(WEAPONS[offer[1].gun!].cls);
-    const flow = offer.find(k => WEAPONS[k.gun!].cls === 2) ?? offer[0];
-    G.p.x = flow.x; G.p.y = flow.y;
+    G.p.x = offer[0].x; G.p.y = offer[0].y;
     takeNear();
     expect(G.pickups.filter(k => k.type === 'weapon' && k.t > 0 && k.group).length).toBe(0);
-    if (WEAPONS[flow.gun!].cls === 2 && flow.gun !== 'mg') expect(G.pickups.some(k => k.type === 'weapon' && k.gun === 'mg' && k.t > 0)).toBe(true);
+    expect(G.p.guns.filter(Boolean).length).toBe(3);
   });
   it('взрывы задевают летающих', () => {
     start(9);

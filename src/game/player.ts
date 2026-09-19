@@ -5,6 +5,7 @@ import { random, rnd } from '../engine/rng';
 import { G } from './world';
 import { pushOut } from './arena';
 import { hitEnemy, checkDeath } from './combat';
+import { addEnemy } from './spawn';
 import { gunPivot, updateTrigger } from './weapons';
 import type { TickInput } from './input';
 import { WW, WH } from './state';
@@ -31,7 +32,12 @@ function move(dt: number, input: TickInput): void {
   let spd = BASE_SPEED * m.speed;
   if (p.rooted) spd *= p.rooted === 'foam' ? .6 : .5;
   if (p.timeSlow) spd *= .55;
-  if (p.cling) { spd *= 1 - .1 * p.cling; p.hp -= p.cling * 1.5 * dt; checkDeath(); }
+  if (p.cling) {
+    spd *= 1 - .08 * p.cling; p.hp -= p.cling * .8 * dt; checkDeath();
+    // лабубу надоедает: раз в 5 секунд один отваливается сам (кувырок стряхивает всех сразу)
+    p.clingT -= dt;
+    if (p.clingT <= 0) { p.cling--; p.clingT = 5; addEnemy('labubu', p.x + rnd(10), p.y + rnd(6)).stun = 1; }
+  }
   if (p.sugar > 0) { p.sugar -= dt; spd *= 1.25; }
   if (p.slip > 0) {
     p.slip -= dt; mx = p.sdx; my = p.sdy; spd = SLIP_SPEED;

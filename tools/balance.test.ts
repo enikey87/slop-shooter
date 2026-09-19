@@ -5,21 +5,24 @@ import { G } from '../src/game/world';
 import { newGame, step } from '../src/game/sim';
 import { choosePerk } from '../src/game/perks';
 import { botInput } from '../src/game/bot';
+import { startingOffer } from '../src/game/inventory';
 import { STEP } from '../src/engine/loop';
 
 declare const process: { env: Record<string, string | undefined> };
 const SEEDS = Number(process.env.SEEDS ?? 8), MINUTES = Number(process.env.MINUTES ?? 10);
+/** LAZY=1 — бот без способностей и кувырка: ближе к новичку. */
+const LAZY = process.env.LAZY === '1';
 
 it(`баланс: ${SEEDS} забегов по ${MINUTES} мин`, { timeout: 600_000 }, () => {
   const rows = [];
   for (let seed = 1; seed <= SEEDS; seed++) {
     const hits = new Map<string, number>();
-    newGame(seed); G.view.w = 427; G.view.h = 254;
+    newGame(seed); G.view.w = 427; G.view.h = 254; startingOffer();
     let lastHp = G.p.hp, bossTime = 0;
     const ticks = MINUTES * 60 / STEP;
     for (let i = 0; i < ticks && G.state !== 'dead' && G.state !== 'victory'; i++) {
       if (G.state === 'perk') choosePerk(0);
-      step(STEP, botInput({ abilities: true, dash: true }));
+      step(STEP, botInput(LAZY ? {} : { abilities: true, dash: true }));
       if (G.boss) bossTime += STEP;
       if (G.p.hp < lastHp - .5) {
         // кто ранил: ближайший враг или последний текст урона

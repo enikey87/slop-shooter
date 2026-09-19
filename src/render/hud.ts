@@ -1,7 +1,7 @@
 // HUD в полном разрешении: реальность, опыт, оружие, дебаффы, счёт, слоты, способности, босс, баннеры, прицел.
 import { P } from '../content/palette';
 import { enemyDef } from '../content/enemies';
-import { WEAPONS, CLASS_NAME, LEVEL_KILLS, MAX_GUN_LEVEL, type WeaponClass } from '../content/weapons';
+import { WEAPONS, LEVEL_KILLS, MAX_GUN_LEVEL } from '../content/weapons';
 import { PHASE_NAMES } from '../content/bosses';
 import { R, clamp } from '../engine/math';
 import { isTouch, PIX_FONT } from '../platform';
@@ -10,8 +10,9 @@ import { G } from '../game/world';
 import { xpNeed } from '../game/state';
 import { bossFrac } from '../game/body';
 import { DEFAULT_PHASES } from '../game/bosses/phases';
-import { curSlot, activeGunId, gunLevel } from '../game/inventory';
+import { curSlot, activeGunId, gunLevel, weaponName, isEvolved } from '../game/inventory';
 import { CD } from '../game/abilities';
+import { COMBO_WINDOW } from '../game/juice';
 import type { AbilityKey } from '../content/perks';
 import { mouse, touch } from '../ui/input';
 import { ctx, view } from './canvas';
@@ -52,7 +53,7 @@ function drawStatus(narrow: boolean): number {
   ctx.fillStyle = P.cyan; ctx.fillRect(PAD + 45, PAD + 31, (xw - 46) * Math.min(1, G.xp / need), 6);
 
   const slot = curSlot(), id = activeGunId(), d = WEAPONS[id], mak = id === 'makarov';
-  txt(`${d.name} · УР ${gunLevel(id)}`, PAD, PAD + 46, mak ? P.paper : P.cyan);
+  txt(`${weaponName(id)} · УР ${gunLevel(id)}`, PAD, PAD + 46, isEvolved(id) ? P.pink : mak ? P.paper : P.cyan);
   txt(mak ? `ПАТРОНЫ ∞ · СЕРИЯ ${p.streak % 3}/3` : `ПАТРОНЫ ${Math.ceil(slot.ammo)}`, PAD, PAD + 60, P.muted);
   if (id === slot.id) {
     const A = d.alt, cd = slot.altCd ?? 0, ready = cd <= 0 && (mak || slot.ammo >= A.cost);
@@ -117,28 +118,42 @@ function drawAbilities(): number {
 }
 
 const CLASS_COLOR = [P.gold, P.cyan, P.vest, P.purple];
-/** 4 слота по классам: пушка, уровень (5 делений), опыт до следующего, патроны. */
+/** 6 слотов: пушка (рамка — цвет класса), уровень (5 делений), опыт до следующего, патроны. */
 function drawGunSlots(narrow: boolean, sy: number, leftEdge: number): void {
   const p = G.p, gap = 8, W = view.W, H = view.H, sw = narrow ? 34 : 40, n = p.guns.length;
   const rowW = n * (sw + gap) - gap;
   const x0 = narrow ? PAD : Math.max(leftEdge + 24, (W - rowW) / 2), y = narrow ? sy + 4 : H - PAD - 18 - sw;
   p.guns.forEach((s, i) => {
-    const x = x0 + i * (sw + gap), sel = i === p.cur, col = CLASS_COLOR[i];
+    const x = x0 + i * (sw + gap), sel = i === p.cur, col = s ? CLASS_COLOR[WEAPONS[s.id].cls - 1] : P.slot;
     box(x, y, sw, sw, sel ? '#3a2d4d' : '#231b30', sel ? P.gold : s ? col : P.slot);
     if (!isTouch) txt(String(i + 1), x + 2, y + 2, sel ? P.gold : P.muted, 8);
-    if (!s) { txt(CLASS_NAME[(i + 1) as WeaponClass].slice(0, 3), x + sw / 2, y + sw / 2 - 4, P.slot, 8, 'center'); return; }
+    if (!s) return;
     const d = WEAPONS[s.id], gi = GUNS[d.sprite].img, sc = Math.min(2, Math.floor((sw - 6) / gi.width) || 1), empty = s.id !== 'makarov' && s.ammo <= 0;
     ctx.globalAlpha = empty ? .35 : 1;
     ctx.drawImage(gi, R(x + (sw - gi.width * sc) / 2), R(y + (sw - gi.height * sc) / 2), gi.width * sc, gi.height * sc);
     ctx.globalAlpha = 1;
     // уровень: 5 делений, нечётные (механики) — золотые
     const gl = G.gunLvl[s.id];
+    if (isEvolved(s.id)) { ctx.strokeStyle = P.pink; ctx.lineWidth = 2; ctx.strokeRect(x - 3, y - 3, sw + 6, sw + 6); }
     for (let j = 0; j < 5; j++) { ctx.fillStyle = j < gl.lvl ? (j % 2 === 0 && j ? P.gold : col) : P.slot; ctx.fillRect(x + 2 + j * ((sw - 4) / 5), y + sw - 5, (sw - 4) / 5 - 1, 3); }
     // опыт до следующего уровня
     if (gl.lvl < MAX_GUN_LEVEL) { const a = LEVEL_KILLS[gl.lvl - 1], b = LEVEL_KILLS[gl.lvl]; ctx.fillStyle = P.white; ctx.fillRect(x + 2, y + sw - 1, (sw - 4) * clamp((gl.xp - a) / (b - a), 0, 1), 1); }
     if (s.id !== 'makarov') txt(String(Math.ceil(s.ammo)), x + sw / 2, y + sw + 4, empty ? P.red : P.muted, 8, 'center');
     if (s.stolen) { ctx.strokeStyle = P.red; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 3, y + 3); ctx.lineTo(x + sw - 3, y + sw - 3); ctx.moveTo(x + sw - 3, y + 3); ctx.lineTo(x + 3, y + sw - 3); ctx.stroke(); }
   });
+}
+
+/** Серия убийств справа: число растёт и дрожит, полоска — сколько ещё держится. */
+function drawCombo(narrow: boolean): void {
+  const c = G.combo;
+  if (c.n < 3) return;
+  const { W, H } = view, x = W - PAD, y = narrow ? H * .5 : H * .42, big = Math.min(28, 12 + c.n / 3), k = c.t / COMBO_WINDOW;
+  const col = c.n >= 50 ? P.red : c.n >= 20 ? P.vest : c.n >= 10 ? P.gold : P.paper;
+  txt('СЕРИЯ', x, y - 12, P.muted, 8, 'right');
+  const j = c.t > COMBO_WINDOW - .1 ? 2 : 0;
+  txt(`×${c.n}`, x + (j ? (G.t * 60 % 2 ? j : -j) : 0), y, col, R(big), 'right');
+  ctx.fillStyle = P.ink; ctx.fillRect(x - 60, y + big + 4, 60, 4);
+  ctx.fillStyle = col; ctx.fillRect(x - 60, y + big + 4, 60 * k, 4);
 }
 
 function drawBossIntro(narrow: boolean): void {
@@ -208,6 +223,7 @@ export function drawHUD(): void {
   sy = drawScore(narrow, sy);
   const abRight = drawAbilities();
   drawGunSlots(narrow, sy, abRight);
+  drawCombo(narrow);
   drawBossIntro(narrow);
   drawBossBar(narrow);
   drawBanner(narrow);

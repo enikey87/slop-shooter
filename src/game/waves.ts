@@ -46,8 +46,10 @@ function waveCleared(): void {
   p.hp = Math.min(m.maxHp, p.hp + m.maxHp * .1); say(p.x, p.y - 30, 'передышка +10%', P.green);
   banner('ВОЛНА ЗАЧИЩЕНА', `+${10 * G.wave} лайков · дядя Вася сбросил лут`, 2.4, P.green);
   const lx = p.x + rnd(50), ly = p.y + rnd(50);
-  G.pickups.push(mkPickup(lx, ly, G.wave % 2 === 1 ? 'gun' : 'up'), mkPickup(lx + 14, ly + 6, 'ammo'));
-  if (p.hp < m.maxHp * .6) G.pickups.push(mkPickup(lx - 14, ly, 'hp'));
+  // первые 4 волны — ящик пушки всегда, дальше через волну
+  G.pickups.push(mkPickup(lx, ly, G.wave <= 4 || G.wave % 2 === 1 ? 'gun' : 'up'), mkPickup(lx + 14, ly + 6, 'ammo'));
+  // перед боссом аптечка всегда, иначе — если реальности меньше 60%
+  if (p.hp < m.maxHp * .6 || bossOfWave(G.wave + 1)) G.pickups.push(mkPickup(lx - 14, ly, 'hp'));
   if (G.wave % 3 === 0) G.pickups.push(mkPickup(lx, ly + 16, 'blindbox'));
 }
 
