@@ -1,26 +1,31 @@
 // Волны: бюджет врагов по номеру, босс каждые 5 волн, передышка с лутом между волнами.
 import { P } from '../content/palette';
 import { TYPES, enemyDef, type EnemyId } from '../content/enemies';
-import { BOSSES } from '../content/bosses';
+import { WAVES_PER_LEVEL } from '../content/levels';
 import { PROMPTS } from '../content/texts.ru';
 import { random, rnd } from '../engine/rng';
-import { G, hooks, sfx } from './world';
+import { G, sfx } from './world';
 import { say, banner } from './fx';
 import { spawnPoint } from './arena';
 import { addEnemy, spawnPortal, spawnFromPortal, eliteChance } from './spawn';
 import { mkPickup } from './pickups';
+import { levelOfWave } from './levels';
 
-export const bossOfWave = (n: number): EnemyId | null => (n % 5 === 0 ? BOSSES[(n / 5 - 1) % BOSSES.length] : null);
+/** Босс — последняя волна уровня. */
+export const bossOfWave = (n: number): EnemyId | null => (n % WAVES_PER_LEVEL === 0 ? levelOfWave(n).boss : null);
 
 /** Состав волны: набираем врагов по весам, пока не кончится бюджет. */
 export function composition(n: number): EnemyId[] {
   const list: EnemyId[] = [];
   let budget = 5 + n * 4.2;
-  const pool = (Object.keys(TYPES) as EnemyId[]).map(id => [id, enemyDef(id)] as const).filter(([, t]) => t.cost && n >= (t.from ?? 1));
-  const total = pool.reduce((s, [, t]) => s + (t.w ?? 0), 0);
+  // веса врагов зависят от уровня: у каждого уровня свой «состав»
+  const lv = levelOfWave(n);
+  const weight = (id: EnemyId): number => G.mod === 'hands' ? (id === 'hand' ? 10 : id === 'printer' ? 1 : 0) : (enemyDef(id).w ?? 0) * (lv.weights[id] ?? 1) + (lv.locals?.[id] ?? 0);
+  const pool = (Object.keys(TYPES) as EnemyId[]).filter(id => enemyDef(id).cost && n >= (enemyDef(id).from ?? 1) && weight(id) > 0).map(id => [id, weight(id)] as const);
+  const total = pool.reduce((s, [, w]) => s + w, 0);
   while (budget > 0) {
     let r = random() * total, k: EnemyId = 'hand';
-    for (const [name, t] of pool) { r -= t.w ?? 0; if (r <= 0) { k = name; break; } }
+    for (const [name, w] of pool) { r -= w; if (r <= 0) { k = name; break; } }
     if (k === 'quadro') list.push('quadro', 'quadro'); // стая
     list.push(k); budget -= enemyDef(k).cost ?? 1;
   }
@@ -32,11 +37,11 @@ export function composition(n: number): EnemyId[] {
 
 export function startWave(n: number): void {
   G.wave = n; G.phase = 'wave'; G.queue = composition(n); G.spawnT = .5;
-  if (n % 5 === 1) hooks.regularMusic(Math.floor((n - 1) / 5));
   sfx('wave');
   const bt = bossOfWave(n);
-  if (bt) banner(bt === 'skuf' ? `ВОЛНА ${n} · ФИНАЛЬНЫЙ БОСС` : `ВОЛНА ${n} · БОСС`, enemyDef(bt).boss ?? '', 3.5, bt === 'skuf' ? P.vest : P.pink);
-  else banner(`ВОЛНА ${n}`, `промпт: ${PROMPTS[(n - 1) % PROMPTS.length]}`, 2.8);
+  const k = (n - 1) % WAVES_PER_LEVEL + 1;
+  if (bt) banner(bt === 'skuf' ? `ВОЛНА ${n} · ФИНАЛЬНЫЙ БОСС` : `ВОЛНА ${n} · БОСС УРОВНЯ`, enemyDef(bt).boss ?? '', 3.5, bt === 'skuf' ? P.vest : P.pink);
+  else banner(`ВОЛНА ${n} · ${k}/${WAVES_PER_LEVEL - 1}`, `промпт: ${PROMPTS[(n - 1) % PROMPTS.length]}`, 2.8);
 }
 
 function waveCleared(): void {
@@ -54,7 +59,8 @@ function waveCleared(): void {
 }
 
 export function updateWaves(dt: number): void {
-  if (G.phase === 'inter') {
+  if (G.phase === 'exit') { /* босс убит — ждём портал (game/levels.ts) */ }
+  else if (G.phase === 'inter') {
     G.interT -= dt;
     if (G.interT <= 0) startWave(G.wave + 1);
   } else {

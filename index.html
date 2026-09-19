@@ -42,6 +42,8 @@
     .label { font-family: var(--pixel); font-size: 10px; letter-spacing: .06em; color: var(--muted); }
     .post { border-left: 4px solid var(--slop); padding-left: 12px; font-style: italic; }
     .stats { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .bar { height: 10px; background: #231b30; border: 2px solid #3a3148; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--pink, #ff8fc7); }
     .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     button {
       font-family: var(--pixel); font-size: 13px; line-height: 1.4;
@@ -124,6 +126,17 @@
   </div>
 </div>
 
+<div class="screen" id="transit" hidden>
+  <div class="card">
+    <span class="label" id="transit-label">ПЕРЕХОД</span>
+    <h1 id="transit-name">УРОВЕНЬ</h1>
+    <p class="post" id="transit-sub"></p>
+    <div class="bar"><i id="transit-bar"></i></div>
+    <p class="stats" id="transit-tip"></p>
+    <p class="stats" id="transit-stats"></p>
+    <div class="row"><button id="btn-transit" type="button" disabled>Войти</button></div>
+  </div>
+</div>
 <div class="screen" id="win" hidden>
   <div class="card">
     <span class="label">ФИНАЛЬНЫЙ БОСС ПОВЕРЖЕН</span>

@@ -4,6 +4,7 @@ import { it } from 'vitest';
 import { G } from '../src/game/world';
 import { newGame, step } from '../src/game/sim';
 import { choosePerk } from '../src/game/perks';
+import { startNextLevel } from '../src/game/levels';
 import { botInput } from '../src/game/bot';
 import { startingOffer } from '../src/game/inventory';
 import { STEP } from '../src/engine/loop';
@@ -22,6 +23,7 @@ it('выносливость', { timeout: 3_600_000 }, () => {
     try {
       for (let i = 0; i < MINUTES * 60 / STEP && G.state !== 'dead'; i++) {
         if (G.state === 'perk') choosePerk(0);
+      if (G.state === 'transit') startNextLevel();
         if (G.state === 'victory') G.state = 'play';
         if (lazy) { G.mods.maxHp = Math.max(G.mods.maxHp, 1e6); G.p.hp = 1e6; }
         step(STEP, botInput(lazy ? {} : { abilities: true, dash: true }));

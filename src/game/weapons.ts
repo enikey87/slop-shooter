@@ -10,6 +10,7 @@ import { bodyY, isBoss } from './body';
 import { hitEnemy, explode, damageProp } from './combat';
 import { activeGunId, curSlot, cycleGun, gunLevel, isEvolved } from './inventory';
 import { hitStop, casing } from './juice';
+import { inStandup } from './mechanics';
 import { WW, WH, type Bullet, type BulletKind, type Enemy, type Player } from './state';
 
 export { curSlot, activeGunId, selectGun, cycleGun } from './inventory';
@@ -235,7 +236,7 @@ const FIRE: Record<WeaponId, (c: FireCtx) => void> = {
 /** Множитель урона пушки: уровень, перки, дебаффы; Макаров ещё растёт с уровнем Геннадия. */
 export function gunDmg(id: WeaponId): number {
   const p = G.p;
-  return levelDmg(gunLevel(id)) * G.mods.dmg * (p.mogged ? .7 : 1) * (id === 'makarov' ? 1 + .06 * (p.level - 1) : 1);
+  return levelDmg(gunLevel(id)) * G.mods.dmg * (p.mogged ? .7 : 1) * (id === 'makarov' ? 1 + .06 * (p.level - 1) : 1) * (G.mod === 'glass' ? 2 : 1);
 }
 
 const NO_FLASH = new Set<WeaponId>(['laser', 'rail', 'link', 'vacuum', 'mines']);
@@ -261,7 +262,7 @@ function shoot(charge = 0): void {
 
 /** Курок на этом тике: раскрутка пулемёта, нагрев лазера, заряд рельсы, обычная стрельба. */
 export function updateTrigger(dt: number, held: boolean): void {
-  const p = G.p, id = activeGunId(), canFire = p.dashT <= 0;
+  const p = G.p, id = activeGunId(), canFire = p.dashT <= 0 && !inStandup();
   if (id === 'mg' && held && canFire) { p.spin = Math.min(1, p.spin + dt / .6); p.spinHold = isEvolved('mg') ? 1e9 : gunLevel('mg') >= 5 ? 2 : 0; }
   else if (p.spinHold > 0) p.spinHold -= dt;
   else p.spin = Math.max(0, p.spin - dt * 2);

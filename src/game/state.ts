@@ -6,10 +6,11 @@ import type { PropKind } from '../content/props';
 import type { MamaPrompt } from '../content/bosses';
 import { WEAPON_IDS, type WeaponId } from '../content/weapons';
 import { baseMods } from '../content/perks';
+import type { LevelId, EndlessMod } from '../content/levels';
 
 export const WW = 800, WH = 560;
 
-export type RunState = 'attract' | 'play' | 'perk' | 'pause' | 'dead' | 'victory';
+export type RunState = 'attract' | 'play' | 'perk' | 'pause' | 'dead' | 'victory' | 'transit';
 
 // ---------- игрок ----------
 export interface GunSlot {
@@ -67,7 +68,7 @@ export interface Player {
 
 // ---------- враги ----------
 export type EnemyState = 'walk' | 'wind' | 'charge' | 'hop' | 'smack' | 'stomp' | 'spin' | 'air' | 'fall' | 'leap' | 'crouch';
-export type StunKind = '' | 'wifi' | 'captcha' | 'bonk';
+export type StunKind = '' | 'wifi' | 'captcha' | 'bonk' | 'standup';
 export interface Enemy {
   type: EnemyId;
   x: number; y: number;
@@ -86,6 +87,8 @@ export interface Enemy {
   variant: number;
   elite: boolean; aff: AffixId | null; affT: number; shield: number;
   stun: number; stunKind?: StunKind;
+  /** босс: сколько ещё нельзя оглушить (после предыдущего оглушения) */
+  stunGuard?: number; stunFor?: number;
   slowT: number; calm: number; charm: number; charmBoom?: boolean;
   /** сколько ещё нельзя переманить капчей (чтобы не держать врага «своим» вечно) */
   charmImmune?: number;
@@ -100,6 +103,8 @@ export interface Enemy {
   dead?: boolean;
   /** вторая фаза обычного врага: у голема отвалилась вывеска, у сигмы слетели очки */
   broken?: boolean;
+  /** мутация абсурда: шапка, лунная походка, двойник-призрак, крошка */
+  mut?: 'hat' | 'moonwalk' | 'twin' | 'tiny';
   /** стример: запал горит, взрыв уже назначен */
   fused?: boolean;
   /** джоконда: зафиксированная точка выстрела */
@@ -108,6 +113,8 @@ export interface Enemy {
   burnS?: number; burnDur?: number; burnTick?: number;
   /** капча: получает +30% урона */
   vulnT?: number;
+  /** таймер общего назначения для механик уровня */
+  aux?: number;
   // флаги
   disguised?: boolean;
   noSep?: boolean;
@@ -207,7 +214,7 @@ export interface Prop {
   /** унитаз: таймер спавна */
   sp?: number;
 }
-export type PickupType = 'ammo' | 'hp' | 'up' | 'gun' | 'coffee' | 'blindbox' | 'dubai' | 'remote' | 'stolen' | 'weapon' | 'evo';
+export type PickupType = 'ammo' | 'hp' | 'up' | 'gun' | 'coffee' | 'carrot' | 'blindbox' | 'dubai' | 'remote' | 'stolen' | 'weapon' | 'evo';
 export interface Pickup {
   x: number; y: number; type: PickupType; t: number; bob: number;
   /** пушка на полу (weapon) или отобранная (stolen) */
@@ -216,7 +223,8 @@ export interface Pickup {
   group?: number; reroll?: boolean;
 }
 export interface Portal { x: number; y: number; type: EnemyId; t: number; max: number; elite: boolean; mama?: boolean; charm?: boolean }
-export type ZoneKind = 'fire' | 'pfire' | 'roots' | 'foam' | 'jpeg' | 'gas';
+/** lava — гречка, invert — управление наоборот, noise — враги невидимы, steam — пар бани (лечит) */
+export type ZoneKind = 'fire' | 'pfire' | 'roots' | 'foam' | 'jpeg' | 'gas' | 'lava' | 'invert' | 'noise' | 'steam';
 /** без kind — лечащая трава игрока */
 export interface Zone { x: number; y: number; r: number; t: number; max: number; kind?: ZoneKind; heal?: number; burn?: boolean }
 export interface Puddle { x: number; y: number; r: number; t: number; col?: 'holy' | 'sewage' }
@@ -238,7 +246,16 @@ export interface GameState {
   state: RunState;
   t: number;
   wave: number;
-  phase: 'inter' | 'wave';
+  /** inter — передышка, wave — волна, exit — босс убит, скоро портал на следующий уровень */
+  phase: 'inter' | 'wave' | 'exit';
+  /** номер уровня в забеге (0 — первый), какой это уровень и модификатор бесконечного режима */
+  level: number; levelId: LevelId; mod: EndlessMod['id'] | null;
+  /** портал на следующий уровень и через сколько он откроется */
+  exit: { x: number; y: number } | null; exitT: number;
+  /** состояние механики уровня (game/mechanics.ts) */
+  mech: { t: number; warn: number; active: number; aux: number };
+  /** статистика уровня для экрана перехода */
+  levelStart: { t: number; kills: number; score: number };
   interT: number;
   queue: EnemyId[];
   spawnT: number;
@@ -290,6 +307,7 @@ export function createPlayer(): Player {
 export function createState(seed: number): GameState {
   return {
     seed, state: 'play', t: 0, wave: 0, phase: 'inter', interT: 1.2, queue: [], spawnT: 0,
+    level: 0, levelId: 'parking', mod: null, exit: null, exitT: 0, mech: { t: 0, warn: 0, active: 0, aux: 0 }, levelStart: { t: 0, kills: 0, score: 0 },
     score: 0, kills: 0, xp: 0, shake: 0, flash: 0, blackout: 0, stuckT: 0, hitStop: 0, combo: { n: 0, t: 0, best: 0 },
     pendingPerks: 0, perkChoices: [], taken: {},
     gunLvl: Object.fromEntries(WEAPON_IDS.map(id => [id, { lvl: 1, xp: 0 }])) as GameState['gunLvl'], offerN: 0, evolved: {},

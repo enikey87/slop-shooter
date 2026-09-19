@@ -10,11 +10,13 @@ import { Snd } from '../audio';
 import { G } from '../game/world';
 import { banner } from '../game/fx';
 import { choosePerk } from '../game/perks';
+import { nextLevelDef, startNextLevel } from '../game/levels';
+import { LEVELS } from '../content/levels';
 import { releaseFire } from './input';
 
 export interface ScreenHandlers { start(): void }
 
-const hideAll = (): void => { for (const id of ['start', 'over', 'pause', 'perks', 'win']) $(id).hidden = true; };
+const hideAll = (): void => { for (const id of ['start', 'over', 'pause', 'perks', 'win', 'transit']) $(id).hidden = true; };
 const stats = (): string => `Волна ${G.wave} · уровень ${G.p.level} · слопа убрано: ${G.kills} · лайков: ${G.score} · ${G.p.guns.filter(Boolean).map(s => `${WEAPONS[s!.id].short} ${G.gunLvl[s!.id].lvl}`).join(' · ')}`;
 
 export function toggleSound(): void {
@@ -59,6 +61,33 @@ export function showPerks(): void {
   (list.firstChild as HTMLElement | null)?.focus();
 }
 
+/** Экран загрузки между уровнями: шутка, статистика уровня, полоска «генерации». */
+export function showTransit(): void {
+  const next = nextLevelDef(), mod = G.level + 1 >= LEVELS.length ? '· БЕСКОНЕЧНЫЙ РЕЖИМ' : `· ${G.level + 2} из ${LEVELS.length}`;
+  const secs = Math.round(G.t - G.levelStart.t), kills = G.kills - G.levelStart.kills, likes = G.score - G.levelStart.score;
+  $('transit-label').textContent = `ПЕРЕХОД ${mod}`;
+  $('transit-name').textContent = next.name;
+  $('transit-sub').textContent = next.sub;
+  $('transit-stats').textContent = `Уровень пройден за ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} · слопа убрано: ${kills} · лайков: ${likes} · лучшая серия: ${G.combo.best}`;
+  const tips = next.loading, btn = $<HTMLButtonElement>('btn-transit'), bar = $('transit-bar');
+  btn.disabled = true; bar.style.width = '0%';
+  $('transit').hidden = false;
+  const t0 = performance.now(), dur = 2600;
+  const tickBar = (): void => {
+    const k = Math.min(1, (performance.now() - t0) / dur);
+    bar.style.width = `${Math.round(k * 100)}%`;
+    $('transit-tip').textContent = `${tips[Math.min(tips.length - 1, Math.floor(k * tips.length))]} ${Math.round(k * 100)}%`;
+    if (k < 1) requestAnimationFrame(tickBar);
+    else { btn.disabled = false; btn.focus(); }
+  };
+  requestAnimationFrame(tickBar);
+}
+function enterNext(): void {
+  if (G.state !== 'transit') return;
+  $('transit').hidden = true;
+  startNextLevel();
+}
+
 export function showGameOver(): void {
   Snd.music(false);
   setTimeout(() => {
@@ -81,6 +110,7 @@ export function initScreens(h: ScreenHandlers): void {
   $('btn-restart').addEventListener('click', start);
   $('btn-win-restart').addEventListener('click', start);
   $('btn-resume').addEventListener('click', togglePause);
+  $('btn-transit').addEventListener('click', enterNext);
   $('btn-continue').addEventListener('click', () => { $('win').hidden = true; G.state = 'play'; banner('БЕСКОНЕЧНЫЙ РЕЖИМ', 'слоп возвращается сильнее', 2.4, P.pink); });
   for (const b of document.querySelectorAll('.snd-toggle')) b.addEventListener('click', toggleSound);
   document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') togglePause(); });

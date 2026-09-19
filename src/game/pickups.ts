@@ -56,10 +56,10 @@ function collect(k: Pickup): void {
       sfx('pickup');
       break;
     }
-    case 'hp': case 'coffee': {
-      const v = (k.type === 'hp' ? 25 : 18) * m.heal;
+    case 'hp': case 'coffee': case 'carrot': {
+      const v = (k.type === 'hp' ? 25 : k.type === 'carrot' ? 12 : 18) * m.heal;
       p.hp = Math.min(m.maxHp, p.hp + v);
-      say(p.x, p.y - 26, k.type === 'hp' ? `потрогал траву +${R(v)}%` : `кофе 3 в 1 +${R(v)}%`, P.green); sfx('pickup');
+      say(p.x, p.y - 26, k.type === 'hp' ? `потрогал траву +${R(v)}%` : k.type === 'carrot' ? `морковка с грядки +${R(v)}%` : `кофе 3 в 1 +${R(v)}%`, P.green); sfx('pickup');
       break;
     }
     case 'gun': offerWeapons(k.x, k.y, 2); sfx('gun'); break;

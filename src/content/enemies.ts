@@ -67,7 +67,10 @@ export const TYPES = {
   streamer:  { r: 5,  hy: 11, hr: 7,  hp: 5,   spd: 68, dmg: 0,  score: 5,   cost: 3,  from: 6, w: 1.6 },
   mona:      { r: 6,  hy: 14, hr: 9,  hp: 14,  spd: 26, dmg: 0,  score: 8,   cost: 6,  from: 8, w: 1 },
   printer:   { r: 9,  hy: 10, hr: 11, hp: 60,  spd: 0,  dmg: 0,  score: 12,  cost: 8,  from: 7, w: .7, heavy: 1 },
-  shawa:     { r: 6,  hy: 9,  hr: 8,  hp: 16,  spd: 22, dmg: 10, score: 6,   cost: 4,  from: 6, w: 1.2 }
+  shawa:     { r: 6,  hy: 9,  hr: 8,  hp: 16,  spd: 22, dmg: 10, score: 6,   cost: 4,  from: 6, w: 1.2 },
+  // только на своих уровнях (вес задаёт уровень, content/levels.ts)
+  guard:     { r: 5,  hy: 11, hr: 7,  hp: 12,  spd: 34, dmg: 8,  score: 5,   cost: 3,  from: 1, w: 0 },
+  bee:       { r: 3,  hy: 0,  hr: 4,  hp: 2,   spd: 95, dmg: 3,  score: 1,   fly: 8 }
 } as const satisfies Record<string, EnemyDef>;
 
 export type EnemyId = keyof typeof TYPES;
@@ -82,11 +85,12 @@ export const SPLAT: Record<EnemyId, readonly string[]> = {
   skibidi: [P.toilet, P.skin, P.cyan], chimp: [P.banana, P.monkey], amogus: [P.sus, P.visor], doge: [P.doge, P.dogeL],
   capy: [P.capy, P.orange], troll: [P.troll, P.greyL], patapim: [P.wood, P.green, P.tan], floppa: [P.floppa, P.floppaD],
   lirili: [P.cactus, P.grey], apostle: [P.shrimp, P.gold], oiia: [P.grey, P.oiiaW, P.pink], sigma: [P.skin, P.turtle], quadro: [P.white, P.brownL, P.orange, P.pink], labubu: [P.lab, P.labP], evasya: [P.track, P.white], skuf: [P.tank, P.skin, P.bottle, P.vest], sixseven: [P.green, P.skin, P.white], skboss: [P.toilet, P.cyan, P.skin], fboss: [P.floppa, P.floppaD, P.pink], ouro: [P.purple, P.pink, P.gold], oseg: [P.purple, P.gold],
+  guard: [P.purple, P.grey, P.white], bee: [P.gold, P.ink],
   streamer: [P.vest, P.gold, P.white], mona: [P.brown, P.gold, P.skin], printer: [P.greyL, P.paper, P.skin], shawa: [P.tan, P.green, P.white]
 };
 
 /** Скорость анимации, кадров в секунду. */
-export const FPS: Partial<Record<EnemyId, number>> = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8, sigma: 6, quadro: 14, skuf: 4, streamer: 14, mona: 3, printer: 6, shawa: 5 };
+export const FPS: Partial<Record<EnemyId, number>> = { hand: 14, cat: 9, kitten: 12, spag: 7, golem: 5, jesus: 6, jboss: 5, shark: 10, croc: 12, ballerina: 8, horse: 7, horseFree: 14, grandpa: 4, mama: 4, cboss: 12, skibidi: 10, chimp: 8, amogus: 12, doge: 8, capy: 5, lirili: 5, skboss: 8, oseg: 8, sixseven: 8, sigma: 6, quadro: 14, skuf: 4, guard: 6, bee: 20, streamer: 14, mona: 3, printer: 6, shawa: 5 };
 
 /** Из кого собирается хвост Уробороса. */
 export const SEG_SKINS: readonly EnemyId[] = ['sixseven', 'hand', 'cat', 'spag', 'shark', 'ballerina', 'doge', 'capy', 'skibidi', 'amogus', 'grandpa', 'tung', 'chimp', 'golem'];

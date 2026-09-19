@@ -20,12 +20,14 @@ import { cycleGun, selectGun, takeNear, rerollNear } from './inventory';
 import type { Action, TickInput } from './input';
 import { tickCombo } from './juice';
 import { sanitize, watchWave } from './guard';
+import { updateLevel } from './levels';
+import { updateMechanic } from './mechanics';
 
 export function newGame(seed: number): GameState {
   reseed(seed);
   const g = createState(seed);
   setGame(g);
-  g.props = layoutProps();
+  g.props = layoutProps(g.levelId);
   return g;
 }
 
@@ -62,7 +64,8 @@ function update(dt: number, input: TickInput): void {
   for (const a of input.actions) if (G.state === 'play') act(a);
   // каждая система отдельно: сбой в одной не останавливает остальные
   guard('игрок', () => updatePlayer(dt, input));
-  guard('волны', () => { updateWaves(dt); watchWave(dt); });
+  guard('волны', () => { updateWaves(dt); watchWave(dt); updateLevel(dt); });
+  guard('механика уровня', () => updateMechanic(dt));
   guard('враги', () => updateEnemies(dt));
   guard('зоны', () => updateHazards(dt));
   guard('союзники', () => updateAllies(dt));
@@ -100,5 +103,6 @@ export function step(dt: number, input: TickInput): void {
     case 'play': update(dt, input); break;
     case 'dead': G.t += dt; tickFx(dt); break;
     case 'attract': attract(dt); break;
+    // экран загрузки уровня: мир стоит
   }
 }

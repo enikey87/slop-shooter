@@ -4,6 +4,7 @@ import { it } from 'vitest';
 import { G } from '../src/game/world';
 import { newGame, step } from '../src/game/sim';
 import { choosePerk } from '../src/game/perks';
+import { startNextLevel } from '../src/game/levels';
 import { botInput } from '../src/game/bot';
 import { startingOffer } from '../src/game/inventory';
 import { STEP } from '../src/engine/loop';
@@ -22,6 +23,7 @@ it(`баланс: ${SEEDS} забегов по ${MINUTES} мин`, { timeout: 60
     const ticks = MINUTES * 60 / STEP;
     for (let i = 0; i < ticks && G.state !== 'dead' && G.state !== 'victory'; i++) {
       if (G.state === 'perk') choosePerk(0);
+      if (G.state === 'transit') startNextLevel();
       step(STEP, botInput(LAZY ? {} : { abilities: true, dash: true }));
       if (G.boss) bossTime += STEP;
       if (G.p.hp < lastHp - .5) {

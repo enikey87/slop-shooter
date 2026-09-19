@@ -4,6 +4,7 @@ import { R } from '../engine/math';
 import { vrnd } from '../engine/rng';
 import { PIX_FONT, isTouch } from '../platform';
 import { G } from '../game/world';
+import { absurdity } from '../game/spawn';
 import { ctx, low, view } from './canvas';
 import { drawWorld, labels } from './world';
 import { drawHUD } from './hud';
@@ -38,6 +39,14 @@ export function draw(): void {
   if (p.hp < 20 && playing) { sx += R(Math.sin(G.t * 2.3) * 2) * S; sy += R(Math.cos(G.t * 1.7) * 1.5) * S; }
   ctx.fillStyle = P.ink; ctx.fillRect(0, 0, W, H);
   ctx.drawImage(low, sx, sy, VW * S, VH * S);
+  // абсурд с 4-го уровня: полоски кадра съезжают, как битое видео
+  const ab = absurdity();
+  if (ab >= 4 && playing && Math.random() < (ab - 3) * .04) {
+    for (let i = 0; i < ab - 2; i++) {
+      const hy = (Math.random() * VH) | 0, hh = 1 + ((Math.random() * 4) | 0), off = R(vrnd(6)) * S;
+      ctx.drawImage(low, 0, hy, VW, hh, sx + off, sy + hy * S, VW * S, hh * S);
+    }
+  }
   if (p.hp < 25 && playing) {
     // двоение в глазах
     ctx.globalAlpha = .18; ctx.globalCompositeOperation = 'lighter';

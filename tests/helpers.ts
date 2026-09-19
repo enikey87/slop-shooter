@@ -4,6 +4,7 @@ import { STEP } from '../src/engine/loop';
 import { botInput, type BotOpts } from '../src/game/bot';
 import { choosePerk } from '../src/game/perks';
 import { idleInput } from '../src/game/input';
+import { startNextLevel } from '../src/game/levels';
 
 export function start(seed = 1): void {
   newGame(seed);
@@ -13,6 +14,7 @@ export function start(seed = 1): void {
 export function run(seconds: number, bot: BotOpts | null = { abilities: true, dash: true }): void {
   for (let i = 0; i < seconds / STEP; i++) {
     if (G.state === 'perk') choosePerk(0);
+    if (G.state === 'transit') startNextLevel();
     if (G.state === 'dead' || G.state === 'victory') return;
     step(STEP, bot ? botInput(bot) : idleInput());
   }

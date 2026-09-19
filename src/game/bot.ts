@@ -10,6 +10,8 @@ import type { Action, TickInput } from './input';
 import { WW, WH } from './state';
 
 export interface BotOpts { abilities?: boolean; dash?: boolean }
+/** Где бот был недавно — чтобы заметить, что он упёрся. */
+const stuck = { x: 0, y: 0, t: 0, side: 0 };
 
 export function botInput(o: BotOpts = {}): TickInput {
   const p = G.p;
@@ -48,8 +50,15 @@ export function botInput(o: BotOpts = {}): TickInput {
     const own = p.guns[slotFor(w.gun!)];
     if (own && own.ammo < WEAPONS[own.id].box * .25) actions.push('take');
   }
+  // портал на следующий уровень открыт — идём в него
+  if (G.exit && (!tg || td > 50)) { mx = G.exit.x - p.x; my = G.exit.y - p.y; }
   // самый тяжёлый слот с патронами
   for (let i = p.guns.length - 1; i >= 0; i--) { const s = p.guns[i]; if (s && s.ammo > 0 && !s.stolen) { if (i !== p.cur) actions.push({ slot: i }); break; } }
+  // застрял об укрытие — полсекунды обходим его вбок
+  if (G.t < stuck.t) { stuck.t = G.t; stuck.side = 0; } // новый забег
+  const moved = Math.hypot(p.x - stuck.x, p.y - stuck.y);
+  if (G.t - stuck.t > .8) { if (moved < 4) stuck.side = G.t + .6; stuck.x = p.x; stuck.y = p.y; stuck.t = G.t; }
+  if (G.t < stuck.side) { const t2 = mx; mx = -my; my = t2; }
   const ml2 = Math.hypot(mx, my) || 1;
   const aim = tg ? { x: tg.x - G.cam.x, y: bodyY(tg) - G.cam.y } : null;
   // рельса стреляет на отпускании: держим до полного заряда

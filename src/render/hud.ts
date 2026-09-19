@@ -12,6 +12,7 @@ import { bossFrac } from '../game/body';
 import { DEFAULT_PHASES } from '../game/bosses/phases';
 import { curSlot, activeGunId, gunLevel, weaponName, isEvolved } from '../game/inventory';
 import { CD } from '../game/abilities';
+import { absurdity } from '../game/spawn';
 import { COMBO_WINDOW } from '../game/juice';
 import type { AbilityKey } from '../content/perks';
 import { mouse, touch } from '../ui/input';
@@ -32,8 +33,11 @@ function box(x: number, y: number, w: number, h: number, fill: string, border: s
   ctx.fillStyle = P.ink; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillStyle = border; ctx.fillRect(x - 1, y - 1, w + 2, h + 2); ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
 }
 /** Надпись «РЕАЛЬНОСТЬ» разваливается вместе со здоровьем. */
+/** С каждым уровнем слово «реальность» пишется всё кривее. */
+const REALITY = ['РЕАЛЬНОСТЬ', 'РЕАЛЬНОСТЬ™', 'РЕАЛЬНОСТЬ (БЕТА)', 'РЕАЛЬНОСЬТЬ', 'РЕЛЬАНСОТЬ', 'Р3АЛЬН0СТЬ.exe', 'РЕ̷А̸Л̵Ь̶Н̷О̸С̵Т̶Ь̷', 'ʁʟɐ ǝɔ ɐʞ ɔʞ'];
 function realityLabel(hp: number): string {
-  return hp > 60 ? 'РЕАЛЬНОСТЬ' : hp > 40 ? 'РЕАЛЬНОСТЬ (НР)' : hp > 20 ? 'РЕАЛЬНОСЬТЬ' : 'РЕЛЬАНСОТЬ';
+  const base = absurdity() - 1, hurtShift = hp > 60 ? 0 : hp > 20 ? 1 : 2;
+  return REALITY[Math.min(REALITY.length - 1, base + hurtShift)];
 }
 
 /** Левый верхний угол. Возвращает Y, с которого можно рисовать дальше. */
