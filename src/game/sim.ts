@@ -18,6 +18,7 @@ import { dash, abilityQ, abilityE, abilityR, abilityC, abilityV, abilityG, congr
 import { altFire } from './weapons';
 import { cycleGun, selectGun, takeNear, rerollNear } from './inventory';
 import type { Action, TickInput } from './input';
+import { tickCombo } from './juice';
 
 export function newGame(seed: number): GameState {
   reseed(seed);
@@ -47,6 +48,8 @@ function act(a: Action): void {
 }
 
 function update(dt: number, input: TickInput): void {
+  // стоп-кадр: мир стоит, нажатия всё равно проходят
+  if (G.hitStop > 0) { G.hitStop -= dt; for (const a of input.actions) act(a); return; }
   G.t += dt;
   // заставка босса: мир замер
   if (G.intro) { G.intro.t -= dt; tickFx(dt); if (G.intro.t <= 0) G.intro = null; return; }
@@ -68,6 +71,7 @@ function update(dt: number, input: TickInput): void {
   G.beams = G.beams.filter(bm => bm.t > 0);
   G.blackout = Math.max(0, G.blackout - dt);
   tickFx(dt);
+  tickCombo(dt);
   if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
   if (G.pendingPerks > 0 && G.state === 'play') openPerks();
 }

@@ -53,8 +53,11 @@ export class Synth {
     } catch { this.ac = null; }
   }
 
+  /** Множитель высоты тона для текущего эффекта: небольшой разброс делает повторы живыми. */
+  private pitch = 1;
   private voice(out: AudioNode): SfxVoice {
     const tone: Voice['tone'] = (f0, f1, dur, type = 'square', vol = .1, delay = 0) => {
+      f0 *= this.pitch; f1 *= this.pitch;
       const ac = this.ac!, t = ac.currentTime + Math.max(0, delay), o = ac.createOscillator(), g = ac.createGain();
       o.type = type; o.frequency.setValueAtTime(f0, t);
       if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
@@ -73,14 +76,16 @@ export class Synth {
     return { tone, noise, arp };
   }
 
-  /** Эффект по имени; gap — не чаще раза в gap секунд (защита от «пулемётного» наложения). */
-  play(name: string, gap = .03): void {
+  /** Эффект по имени; gap — не чаще раза в gap секунд (защита от «пулемётного» наложения); pitch — высота (по умолчанию ±7% случайно). */
+  play(name: string, gap = .03, pitch = .93 + Math.random() * .14): void {
     const ac = this.ac, fx = this.sfx[name];
     if (!ac || !this.enabled || !fx) return;
     const now = ac.currentTime, l = this.last.get(name);
     if (l !== undefined && now - l < gap) return;
     this.last.set(name, now);
+    this.pitch = pitch;
     fx(this.sfxVoice ??= this.voice(this.sfxBus));
+    this.pitch = 1;
   }
   private sfxVoice: SfxVoice | undefined;
 

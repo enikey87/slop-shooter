@@ -10,9 +10,10 @@ import { isTouch } from '../platform';
 import { G } from '../game/world';
 import { bodyY, scaleOf, isBoss } from '../game/body';
 import { gunPivot } from '../game/weapons';
-import { activeGunId, gunLevel, weaponNear } from '../game/inventory';
+import { activeGunId, gunLevel, weaponNear, slotFor } from '../game/inventory';
 import { WEAPONS } from '../content/weapons';
 import { TIERS } from '../content/tiers';
+import { EVOLUTIONS } from '../content/evolutions';
 import type { Ally, Enemy, Pickup, Player, Prop } from '../game/state';
 import { SPR, GUNS } from './sprites';
 import { sprOf, enemyFrame } from './enemySprites';
@@ -118,6 +119,14 @@ function drawEnemy(e: Enemy): void {
 
 function drawAlly(al: Ally): void {
   drawShadow(al.x, al.y, al.kind === 'dog' ? 5 : 6);
+  if (al.kind === 'robovac') {
+    // круглый робот-пылесос: корпус, бампер, мигающий диод
+    lx.fillStyle = P.ink; lx.fillRect(R(al.x - 5), R(al.y - 4), 10, 5); lx.fillRect(R(al.x - 4), R(al.y - 5), 8, 7);
+    lx.fillStyle = P.metal; lx.fillRect(R(al.x - 4), R(al.y - 4), 8, 4);
+    lx.fillStyle = P.greyL; lx.fillRect(R(al.x - 3), R(al.y - 4), 6, 1);
+    lx.fillStyle = blink(4) ? P.led : P.greenD; lx.fillRect(R(al.x + al.face * 2), R(al.y - 3), 1, 1);
+    return;
+  }
   const alpha = al.t < 1.5 && blink(10) ? .4 : 1;
   if (al.kind === 'dog') { blit(SPR.doge, al.moving ? ((G.t * 10) | 0) % 4 : 0, al.x, al.y, al.face, { alpha, outline: P.cyan }); return; }
   if (al.kind === 'turret') {
@@ -151,6 +160,14 @@ function drawPickup(k: Pickup): void {
   if (k.t < 3 && ((k.t * 8) | 0) % 2) return;
   const lift = R(Math.sin(k.bob) * 1.5) - 2;
   drawShadow(k.x, k.y, 5);
+  if (k.type === 'evo') {
+    // сундук эволюции: пушка с радужной обводкой
+    const d = WEAPONS[k.gun ?? 'makarov'], gs = gunSheet(d.sprite), gi = gs.frames[0], x = R(k.x - gi.width / 2), y = R(k.y + lift - gi.height - 2);
+    const t = tint(gs, 0, [P.pink, P.gold, P.cyan, P.green, P.purple][((G.t * 8) | 0) % 5]);
+    for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 0], [2, 0]]) lx.drawImage(t, x + ox, y + oy);
+    lx.drawImage(gi, x, y);
+    return;
+  }
   if (k.type === 'stolen' || k.type === 'weapon') {
     const d = WEAPONS[k.gun ?? 'makarov'], gs = gunSheet(d.sprite), gi = gs.frames[0], x = R(k.x - gi.width / 2), y = R(k.y + lift - gi.height - 2);
     // обводка: красная у отобранной, цвет класса у пушки на полу
@@ -279,10 +296,11 @@ function collectLabels(): void {
   const p = G.p;
   let stunLabels = 0, charmLabels = 0;
   for (const k of G.pickups) if (k.type === 'stolen' || k.type === 'remote') labels.push({ x: k.x, y: k.y - 20, txt: k.type === 'remote' ? 'ПУЛЬТ' : 'ТВОЯ ПУШКА', color: k.type === 'remote' ? P.gold : P.red });
+  for (const k of G.pickups) if (k.type === 'evo' && k.gun) labels.push({ x: k.x, y: k.y - 20, txt: `ЭВОЛЮЦИЯ: ${EVOLUTIONS[k.gun]?.name ?? ''}`, color: P.pink, big: true });
   // пушки на полу: имя, и что будет по T
   const near = weaponNear();
   for (const k of G.pickups) if (k.type === 'weapon' && k.gun) {
-    const d = WEAPONS[k.gun], own = p.guns[d.cls - 1], lvl = G.gunLvl[k.gun].lvl;
+    const d = WEAPONS[k.gun], own = p.guns[slotFor(k.gun)], lvl = G.gunLvl[k.gun].lvl;
     let txt = `${d.short} ур.${lvl}`;
     if (k === near && own && own.id !== k.gun) txt = isTouch ? `ВЗЯТЬ ВМЕСТО ${WEAPONS[own.id].short}` : `T — ВМЕСТО ${WEAPONS[own.id].short}`;
     labels.push({ x: k.x, y: k.y - 18, txt, color: CLASS_GLOW[d.cls - 1] });

@@ -35,7 +35,7 @@ export interface Player {
   dashT: number; dashCd: number; dashId: number;
   trail: Ghost[];
   level: number;
-  /** 4 слота по классам (индекс = класс − 1), пустой слот — null. Слот 0 — всегда Макаров. */
+  /** 6 слотов, пустой — null. Слот 0 — всегда Макаров. */
   guns: (GunSlot | null)[]; cur: number;
   // состояние отдельных пушек
   /** Макаров: попаданий подряд */
@@ -59,6 +59,8 @@ export interface Player {
   // дебаффы от врагов
   invert: number; noGun: number; scramble: number; slip: number; sdx: number; sdy: number;
   cling: number; sugar: number;
+  /** через сколько секунд лабубу надоест и один отвалится сам */
+  clingT: number;
   guilt: boolean; wobble: boolean; mogged: boolean; timeSlow: boolean;
   rooted: false | 'roots' | 'foam';
 }
@@ -203,7 +205,7 @@ export interface Prop {
   /** унитаз: таймер спавна */
   sp?: number;
 }
-export type PickupType = 'ammo' | 'hp' | 'up' | 'gun' | 'coffee' | 'blindbox' | 'dubai' | 'remote' | 'stolen' | 'weapon';
+export type PickupType = 'ammo' | 'hp' | 'up' | 'gun' | 'coffee' | 'blindbox' | 'dubai' | 'remote' | 'stolen' | 'weapon' | 'evo';
 export interface Pickup {
   x: number; y: number; type: PickupType; t: number; bob: number;
   /** пушка на полу (weapon) или отобранная (stolen) */
@@ -219,7 +221,7 @@ export interface Puddle { x: number; y: number; r: number; t: number; col?: 'hol
 export interface Bomb { x: number; y: number; t: number; max: number; alt: number; dmg: number; r: number }
 export interface Mine { x: number; y: number; arm: number; dmg: number; dead?: boolean }
 export interface Peel { x: number; y: number; t: number }
-export type AllyKind = 'vasya' | 'dog' | 'turret';
+export type AllyKind = 'vasya' | 'dog' | 'turret' | 'robovac';
 export interface Ally { kind: AllyKind; x: number; y: number; r?: number; t: number; fire: number; ang: number; face: number; talk: number; shotgun?: boolean; moving?: boolean }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; t: number; max: number; type: 'laser' | 'rail' | 'link' | 'sniper' }
 
@@ -240,11 +242,17 @@ export interface GameState {
   spawnT: number;
   score: number; kills: number; xp: number;
   shake: number; flash: number; blackout: number;
+  /** стоп-кадр: мир замирает на долю секунды от тяжёлых попаданий */
+  hitStop: number;
+  /** серия убийств: сколько, сколько секунд ещё держится, лучшая за забег */
+  combo: { n: number; t: number; best: number };
   pendingPerks: number; perkChoices: PerkDef[]; taken: Record<string, number>;
   /** уровень и опыт каждой пушки в этом забеге — хранится у типа, а не у слота */
   gunLvl: Record<WeaponId, { lvl: number; xp: number }>;
   /** счётчик групп пушек из ящиков */
   offerN: number;
+  /** какие пушки эволюционировали (content/evolutions.ts) */
+  evolved: Partial<Record<WeaponId, boolean>>;
   mods: Mods;
   ab: AbilityLevels;
   p: Player;
@@ -266,11 +274,11 @@ export function createPlayer(): Player {
     x: WW / 2, y: WH / 2, r: 5, hy: 9, hr: 6, hp: 100, ang: 0, face: 1, aimX: WW / 2 + 40, aimY: WH / 2,
     dx: 1, dy: 0, moving: false, anim: 0, recoil: 0,
     fireT: 0, inv: 0, hit: 0, dashT: 0, dashCd: 0, dashId: 0, trail: [], level: 1,
-    guns: [{ id: 'makarov', ammo: Infinity }, null, null, null], cur: 0,
+    guns: [{ id: 'makarov', ammo: Infinity }, null, null, null, null, null], cur: 0,
     streak: 0, spin: 0, spinHold: 0, mgN: 0, charge: 0, heat: 0, heatTarget: null, vacEaten: 0, shotN: 0,
     cdQ: 0, cdE: 0, cdC: 0, cdV: 0, cdG: 0, ult: 0,
     hist: [], histT: 0, auraT: 0,
-    invert: 0, noGun: 0, scramble: 0, slip: 0, sdx: 0, sdy: 0, cling: 0, sugar: 0,
+    invert: 0, noGun: 0, scramble: 0, slip: 0, sdx: 0, sdy: 0, cling: 0, clingT: 0, sugar: 0,
     guilt: false, wobble: false, mogged: false, timeSlow: false, rooted: false
   };
 }
@@ -278,9 +286,9 @@ export function createPlayer(): Player {
 export function createState(seed: number): GameState {
   return {
     seed, state: 'play', t: 0, wave: 0, phase: 'inter', interT: 1.2, queue: [], spawnT: 0,
-    score: 0, kills: 0, xp: 0, shake: 0, flash: 0, blackout: 0,
+    score: 0, kills: 0, xp: 0, shake: 0, flash: 0, blackout: 0, hitStop: 0, combo: { n: 0, t: 0, best: 0 },
     pendingPerks: 0, perkChoices: [], taken: {},
-    gunLvl: Object.fromEntries(WEAPON_IDS.map(id => [id, { lvl: 1, xp: 0 }])) as GameState['gunLvl'], offerN: 0,
+    gunLvl: Object.fromEntries(WEAPON_IDS.map(id => [id, { lvl: 1, xp: 0 }])) as GameState['gunLvl'], offerN: 0, evolved: {},
     mods: baseMods(), ab: { q: 1, e: 1, r: 1, c: 1, v: 1, g: 1 },
     p: createPlayer(),
     cam: { x: 0, y: 0 }, view: { w: 320, h: 200 },
