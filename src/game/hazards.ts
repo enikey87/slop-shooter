@@ -16,7 +16,11 @@ export function updateHazards(dt: number): void {
   for (const z of G.zones) {
     z.t -= dt;
     const inside = onFloor(p.x, p.y, z.x, z.y, z.r), grounded = p.dashT <= 0;
-    if (z.kind === 'gas') { if (inside && grounded) { p.hp -= 12 * dt; if (random() < dt * 2) say(p.x, p.y - 22, 'ВОНЯЕТ', P.greenL); checkDeath(); } }
+    if (z.kind === 'lava') { if (inside && grounded) { p.hp -= 15 * dt; if (random() < dt * 2) say(p.x, p.y - 22, 'ГОРЯЧАЯ ГРЕЧКА', P.brownL); checkDeath(); } }
+    else if (z.kind === 'invert') { if (inside) p.invert = Math.max(p.invert, .1); }
+    else if (z.kind === 'noise') { /* враги невидимы — game/mechanics.ts */ }
+    else if (z.kind === 'steam') { if (inside) p.hp = Math.min(m.maxHp, p.hp + (z.heal ?? 6) * m.heal * dt); }
+    else if (z.kind === 'gas') { if (inside && grounded) { p.hp -= 12 * dt; if (random() < dt * 2) say(p.x, p.y - 22, 'ВОНЯЕТ', P.greenL); checkDeath(); } }
     else if (z.kind === 'fire' || z.kind === 'pfire') { if (inside && grounded) { p.hp -= 14 * dt; if (random() < dt * 2) say(p.x, p.y - 22, 'ГОРЯЧО', P.vest); checkDeath(); } }
     else if (z.kind === 'roots' || z.kind === 'foam') { if (inside && grounded) p.rooted = z.kind; }
     else if (inside) p.hp = Math.min(m.maxHp, p.hp + (z.heal ?? 6) * m.heal * dt);

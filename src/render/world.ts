@@ -14,6 +14,9 @@ import { activeGunId, gunLevel, weaponNear, slotFor } from '../game/inventory';
 import { WEAPONS } from '../content/weapons';
 import { TIERS } from '../content/tiers';
 import { EVOLUTIONS } from '../content/evolutions';
+import { flooding, BRIDGES, LASERS, laserState } from '../game/mechanics';
+import { levelDef, nextLevelName } from '../game/levels';
+import { WW, WH } from '../game/state';
 import type { Ally, Enemy, Pickup, Player, Prop } from '../game/state';
 import { SPR, GUNS } from './sprites';
 import { sprOf, enemyFrame } from './enemySprites';
@@ -90,7 +93,7 @@ function drawEnemy(e: Enemy): void {
     if (((e.t * 2) | 0) % 7 === 0) { lx.fillStyle = P.red; lx.fillRect(R(e.x + 4), R(e.y - 8 + lift), 1, 1); }
     return;
   }
-  const spr = sprOf(e), sc = scaleOf(e), f = enemyFrame(e);
+  const spr = sprOf(e), sc = scaleOf(e) * (e.mut === 'tiny' ? .7 : 1), f = enemyFrame(e);
   let y = e.y - e.z - (e.grounded ? 10 * sc : 0);
   if (e.alt) y = e.y - e.alt - Math.sin(e.t * 3) * 2;
   if (!e.alt) drawShadow(e.x, e.y, R(e.r * 1.1) + 1);
@@ -98,13 +101,16 @@ function drawEnemy(e: Enemy): void {
   if (e.type === 'jesus' || e.type === 'jboss') blit(SPR.halo, ((e.t * 3) | 0) % 2, e.x + e.face * sc, y - 31 * sc, 1, { scale: sc });
   const boss = isBoss(e) && !e.decoy, bph = boss ? e.phase : e.type === 'oseg' && e.head ? e.head.phase : 0;
   const outline = e.charm > 0 ? P.purple : e.elite && e.aff ? AFFIX[e.aff].color : boss || e.type === 'oseg' ? [P.gold, P.vest, P.red][bph] : e.decoy ? P.purple : null;
-  const alpha = e.type === 'troll' ? e.vis : e.decoy ? .45 + .25 * Math.sin(e.t * 9) : null;
+  const alpha = e.vis < 1 ? e.vis : e.decoy ? .45 + .25 * Math.sin(e.t * 9) : null;
   const jx = e.trans && e.trans > 0 ? R(vrnd(2)) : 0;
   const flashColor = e.flash > 0 ? (e.trans && e.trans > 0 ? P.red : '#ffffff') : e.stun > 0 && blink(8) ? P.cyan : null;
   const tierCol = TIERS[e.tier]?.color;
-  blit(spr, f, e.x + jx, y, e.type === 'sixseven' || e.skin === 'sixseven' ? 1 : e.face, { color: flashColor, outline: outline ?? (e.tier === 3 ? tierCol : null), scale: sc, alpha, dmg: bph || (e.broken && e.type === 'golem' ? 1 : 0) });
+  const face = (e.type === 'sixseven' || e.skin === 'sixseven' ? 1 : e.face) * (e.mut === 'moonwalk' ? -1 : 1);
+  if (e.mut === 'twin') blit(spr, (f + 1) % spr.n, e.x + jx + 6, y - 2, face, { scale: sc, alpha: .35, color: P.purple });
+  blit(spr, f, e.x + jx, y, face, { color: flashColor, outline: outline ?? (e.tier === 3 ? tierCol : null), scale: sc, alpha, dmg: bph || (e.broken && e.type === 'golem' ? 1 : 0) });
   // ступень: подсветка спрайта цветом (как цвета монстров в Alien Shooter)
-  if (tierCol && !flashColor) blit(spr, f, e.x + jx, y, e.type === 'sixseven' ? 1 : e.face, { color: tierCol, scale: sc, alpha: e.tier === 3 ? .25 + .15 * Math.sin(G.t * 5) : .3 });
+  if (e.mut === 'hat') { const hy = y - spr.ay * sc - 3; lx.fillStyle = [P.pink, P.cyan, P.gold][(e.variant) % 3]; lx.fillRect(R(e.x - 2), R(hy + 2), 5, 1); lx.fillRect(R(e.x - 1), R(hy), 3, 2); lx.fillStyle = P.white; lx.fillRect(R(e.x), R(hy - 1), 1, 1); }
+  if (tierCol && !flashColor) blit(spr, f, e.x + jx, y, face, { color: tierCol, scale: sc, alpha: e.tier === 3 ? .25 + .15 * Math.sin(G.t * 5) : .3 });
   if (e.type === 'lirili') { lx.fillStyle = P.white; for (let i = 0; i < 12; i += 3) { const a = -G.t * .8 + i / 12 * TAU; lx.fillRect(R(e.x + Math.cos(a) * 75), R(e.y + Math.sin(a) * 45), 1, 1); } }
   if (e.shield > 0) dotRing(e.x, bodyY(e), e.hr + 2, (e.hr + 2) * .8, 12, 'rgba(255,248,236,.5)', G.t * 3);
   if (e.type === 'ballerina' && e.spin && e.spin > 0) { lx.fillStyle = P.pinkL; for (let i = 0; i < 6; i++) { const a = e.t * 14 + i; lx.fillRect(R(e.x + Math.cos(a) * 9), R(e.y - 12 + Math.sin(a) * 4), 1, 1); } }
@@ -142,7 +148,7 @@ function drawAlly(al: Ally): void {
 
 function drawProp(pr: Prop): void {
   const def = PROPDEF[pr.kind], spr = SPR[pr.kind];
-  const f = pr.kind === 'cab' ? ((G.t * 2 + pr.seed) | 0) % 3 : pr.kind === 'vend' ? ((G.t * 2 + pr.seed) | 0) % 2 : 0;
+  const f = ((G.t * 2 + pr.seed) | 0) % spr.n;
   const jig = pr.flash > 0 ? R(vrnd(1)) : 0;
   lx.drawImage(pr.flash > 0 ? tint(spr, f, '#ffffff') : spr.frames[f], pr.x + def.ox + jig, pr.y + def.oy);
 }
@@ -155,7 +161,7 @@ function gunSheet(id: number): Sheet {
   return s;
 }
 const CLASS_GLOW = [P.gold, P.cyan, P.vest, P.purple];
-const PICKUP_SPR = { ammo: 'ammo', hp: 'grass', up: 'disk', gun: 'gunbox', coffee: 'coffee', blindbox: 'blindbox', dubai: 'dubai', remote: 'remote' } as const;
+const PICKUP_SPR = { ammo: 'ammo', hp: 'grass', up: 'disk', gun: 'gunbox', coffee: 'coffee', carrot: 'carrot', blindbox: 'blindbox', dubai: 'dubai', remote: 'remote' } as const;
 function drawPickup(k: Pickup): void {
   if (k.t < 3 && ((k.t * 8) | 0) % 2) return;
   const lift = R(Math.sin(k.bob) * 1.5) - 2;
@@ -190,6 +196,17 @@ function drawZones(): void {
     } else if (z.kind === 'foam') {
       lx.globalAlpha = fade * .85;
       for (let i = 0; i < 30; i++) { const ang = i * 2.4, rr = (i % 6) / 6 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6; lx.fillStyle = i % 3 ? P.white : P.gold; lx.fillRect(R(x), R(y) - (((G.t * 3 + i) | 0) % 2), 1 + (i % 2), 1); }
+    } else if (z.kind === 'lava') {
+      // гречка: коричневые зёрна кипят
+      for (let i = 0; i < 18; i++) { const ang = i * 2.4, rr = (i % 5) / 5 * z.r, x = z.x + Math.cos(ang) * rr, y = z.y + Math.sin(ang) * rr * .6, b = ((G.t * 4 + i) | 0) % 3; lx.fillStyle = b ? '#7a4b2e' : '#e8a94c'; lx.fillRect(R(x), R(y) - (b === 0 ? 1 : 0), 2, 1); }
+    } else if (z.kind === 'steam') {
+      lx.globalAlpha = .45;
+      for (let i = 0; i < 12; i++) { const a = G.t * .8 + i, rr = (i % 4) / 4 * z.r; lx.fillStyle = P.white; lx.fillRect(R(z.x + Math.cos(a) * rr), R(z.y + Math.sin(a) * rr * .6 - ((G.t * 8 + i * 3) % 10)), 2, 2); }
+    } else if (z.kind === 'invert' || z.kind === 'noise') {
+      // инверсия — фиолетовая воронка, шум — телевизионная рябь
+      lx.globalAlpha = .5;
+      if (z.kind === 'invert') dotRing(z.x, z.y, z.r, z.r * .6, 30, P.purple, -G.t * 2);
+      for (let i = 0; i < 26; i++) { const a = i * 2.4 + (z.kind === 'invert' ? G.t * 2 : 0), rr = ((i * 7) % 10) / 10 * z.r; lx.fillStyle = z.kind === 'invert' ? P.purple : vpick([P.white, P.grey, P.ink]); lx.fillRect(R(z.x + Math.cos(a) * rr), R(z.y + Math.sin(a) * rr * .6), 1, 1); }
     } else if (z.kind === 'gas') {
       // вонь: зелёные клубы, покачиваются
       lx.globalAlpha = fade * .55;
@@ -244,6 +261,28 @@ function drawFloorItems(): void {
 }
 
 /** Связи боссов с их «щитами»: лучи к апостолам, трубы к унитазам, пасть к хвосту. */
+/** Механики уровня: вода смыва, лазеры, портал на следующий уровень. */
+function drawLevelFx(): void {
+  if (flooding()) {
+    lx.fillStyle = 'rgba(58,143,184,.45)'; lx.fillRect(0, 0, WW, WH);
+    lx.fillStyle = blink(3) ? 'rgba(255,248,236,.25)' : 'rgba(127,214,255,.3)';
+    for (let i = 0; i < 60; i++) lx.fillRect(R((i * 97 + G.t * 40) % WW), R((i * 53) % WH), 4, 1);
+    for (const [bx, by, bw, bh] of BRIDGES) { lx.fillStyle = '#6e4a2a'; lx.fillRect(bx, by, bw, bh); lx.fillStyle = '#5a3a24'; for (let y = by; y < by + bh; y += 5) lx.fillRect(bx, y, bw, 1); }
+  }
+  if (levelDef().mechanic === 'lasers') LASERS.forEach(([x0, y0, x1, y1], i) => {
+    const st = laserState(i);
+    if (st.on) { pixLine(x0, y0, x1, y1, P.red, 2); pixLine(x0, y0, x1, y1, '#ffb0a0', 1); }
+    else if (st.soon && blink(12)) { lx.globalAlpha = .4; pixLine(x0, y0, x1, y1, P.red, 1); lx.globalAlpha = 1; }
+    lx.fillStyle = P.metal; lx.fillRect(x0 - 1, y0 - 2, 3, 4); lx.fillRect(x1 - 1, y1 - 2, 3, 4);
+  });
+  const ex = G.exit;
+  if (ex) {
+    // портал на следующий уровень: вращающаяся спираль всех цветов
+    for (let k = 0; k < 3; k++) dotRing(ex.x, ex.y, 22 - k * 6, 13 - k * 4, 32 - k * 8, [P.pink, P.cyan, P.gold][k], G.t * (3 + k) * (k % 2 ? -1 : 1));
+    lx.fillStyle = blink(6) ? P.white : P.purple; lx.fillRect(R(ex.x - 2), R(ex.y - 2), 4, 4);
+  }
+}
+
 /** Замахи и прицелы, которые надо видеть заранее: линия Джоконды, круг дубины тун-туна, запал стримера. */
 function drawTelegraphs(): void {
   for (const e of G.enemies) {
@@ -292,11 +331,12 @@ function drawActors(): void {
   for (const e of G.enemies) if (e.alt) { try { drawEnemy(e); } catch { /* пропуск */ } }
 }
 
-const STUN_TEXT = { captcha: 'выберите все светофоры', wifi: 'нет сети', bonk: 'бонк' } as const;
+const STUN_TEXT = { captcha: 'выберите все светофоры', wifi: 'нет сети', bonk: 'бонк', standup: 'что делал вчера?' } as const;
 function collectLabels(): void {
   const p = G.p;
   let stunLabels = 0, charmLabels = 0;
   for (const k of G.pickups) if (k.type === 'stolen' || k.type === 'remote') labels.push({ x: k.x, y: k.y - 20, txt: k.type === 'remote' ? 'ПУЛЬТ' : 'ТВОЯ ПУШКА', color: k.type === 'remote' ? P.gold : P.red });
+  if (G.exit) labels.push({ x: G.exit.x, y: G.exit.y - 30, txt: `ПОРТАЛ → ${nextLevelName()}`, color: P.cyan, big: true });
   for (const k of G.pickups) if (k.type === 'evo' && k.gun) labels.push({ x: k.x, y: k.y - 20, txt: `ЭВОЛЮЦИЯ: ${EVOLUTIONS[k.gun]?.name ?? ''}`, color: P.pink, big: true });
   // пушки на полу: имя, и что будет по T
   const near = weaponNear();
@@ -326,6 +366,7 @@ function collectLabels(): void {
       const k = Math.min(1, e.prompt.t / (e.prompt.dur * .7));
       labels.push({ x: e.x, y: e.y - 50, txt: `> ${e.prompt.txt.slice(0, Math.ceil(e.prompt.txt.length * k))}${blink(4) ? '_' : ' '}`, color: e.prompt.edited ? P.cyan : P.white, big: true });
     }
+    if (e.stunKind === 'standup' && e.stun > 0 && stunLabels < 6) { stunLabels++; labels.push({ x: e.x, y: bodyY(e) - e.hr - 14, txt: 'что делал вчера?', color: P.cyan }); }
     if (e.type === 'grandpa' && Math.hypot(e.x - p.x, e.y - p.y) < 36) labels.push({ x: e.x, y: e.y - 36, txt: isTouch ? 'ПОЗДРАВИТЬ' : 'F — ПОЗДРАВИТЬ', color: P.gold });
   }
 }
@@ -435,6 +476,7 @@ export function drawWorld(): void {
   drawZones();
   drawFloorItems();
   drawBossTethers();
+  drawLevelFx();
   drawAuras();
   drawTelegraphs();
   drawActors();

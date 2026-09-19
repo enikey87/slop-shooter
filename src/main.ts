@@ -20,7 +20,11 @@ import type { EnemyId } from './content/enemies';
 import type { WeaponId } from './content/weapons';
 import { initInput, readTick } from './ui/input';
 import { initTouchbar, updateTouchbar } from './ui/touchbar';
-import { initScreens, showPerks, showGameOver, showVictory, togglePause, toggleSound, pickPerk } from './ui/screens';
+import { initScreens, showPerks, showGameOver, showVictory, showTransit, togglePause, toggleSound, pickPerk } from './ui/screens';
+import { LEVELS } from './content/levels';
+import { REGULAR } from './content/music';
+import { banner } from './game/fx';
+import { enterLevel } from './game/levels';
 
 if (isTouch) { $('keys-desktop').hidden = true; $('keys-touch').hidden = false; }
 
@@ -32,6 +36,8 @@ setHooks({
   perksOpened: showPerks,
   gameOver: showGameOver,
   victory: showVictory,
+  transit: showTransit,
+  levelStart: id => { buildFloor(id); const lv = LEVELS.find(l => l.id === id)!; const i = REGULAR.indexOf(lv.music as typeof REGULAR[number]); Snd.regular(i < 0 ? 0 : i); Snd.bossMode(false); },
   error: (err, where) => reportError(err, `tick:${where}`)
 });
 
@@ -45,8 +51,9 @@ function startRun(): void {
   Snd.init();
   newGame(freshSeed());
   syncView();
-  buildFloor();
+  buildFloor(G.levelId);
   startingOffer();
+  banner(LEVELS[0].name, 'выбери пушку: наступи на неё · X — перегенерировать', 3.5, '#f7c948');
   Snd.regular(0); Snd.bossMode(false); Snd.music(true);
 }
 
@@ -102,7 +109,9 @@ window.__slop = () => G;
 window.__slopErrors = errors;
 window.__slopDebug = {
   makeEnemy: (t: EnemyId, x: number, y: number, el: boolean) => addEnemy(t, x, y, el),
-  giveGun: takeWeapon, lvl: (id: WeaponId, l: number) => { G.gunLvl[id].lvl = l; }, PROPS: () => G.props, spawnSeg: spawnOuroSegments, snd: () => Snd.debug,
+  giveGun: takeWeapon,
+  /** перейти на уровень i (0…6) — для проверки уровней из консоли */
+  level: (i: number) => { G.level = i; G.levelId = LEVELS[i].id; G.wave = i * 5; enterLevel(); }, lvl: (id: WeaponId, l: number) => { G.gunLvl[id].lvl = l; }, PROPS: () => G.props, spawnSeg: spawnOuroSegments, snd: () => Snd.debug,
   hit: (e: Parameters<typeof hitEnemy>[0], d: number) => hitEnemy(e, d, 0, 0, { noCrit: true }),
   hitProp: damageProp
 };

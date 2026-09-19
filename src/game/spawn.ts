@@ -4,6 +4,10 @@ import { enemyDef, TYPES, SEG_SKINS, type EnemyId } from '../content/enemies';
 import { AFFIX, type AffixId } from '../content/affixes';
 import { BOSS_SUB } from '../content/bosses';
 import { TIERS, tierOdds } from '../content/tiers';
+import { LEVELS } from '../content/levels';
+
+/** Градус абсурда текущего уровня (1…7; в бесконечном режиме — максимум). */
+export const absurdity = (): number => G.level >= LEVELS.length ? 7 : LEVELS[G.level].absurd;
 import { TAU } from '../engine/math';
 import { random, pick } from '../engine/rng';
 import { G, hooks, sfx } from './world';
@@ -27,6 +31,13 @@ export function makeEnemy(type: EnemyId, x: number, y: number, elite = false): E
     state: 'walk', st: 0, orbit: random() * TAU, charm: 0, calm: 0, vis: 1, phase: 0, tier: 0
   };
   if (!T.boss && T.cost) applyTier(e, rollTier(n));
+  if (G.mod === 'turbo') e.spd *= 1.4;
+  // абсурд с 5-го уровня: мутации (шапка, лунная походка, двойник, крошка)
+  const ab = absurdity();
+  if (!T.boss && ab >= 5 && random() < (ab - 4) * .08) {
+    e.mut = pick(['hat', 'moonwalk', 'twin', 'tiny'] as const);
+    if (e.mut === 'tiny') { e.r *= .7; e.hr *= .7; e.hp *= .7; e.max *= .7; e.spd *= 1.2; }
+  }
   if (type === 'amogus') e.disguised = true;
   if (type === 'ouro' || type === 'oseg') e.noSep = true;
   if (elite && !T.boss) {

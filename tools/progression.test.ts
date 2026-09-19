@@ -4,6 +4,7 @@ import { it } from 'vitest';
 import { G } from '../src/game/world';
 import { newGame, step } from '../src/game/sim';
 import { choosePerk } from '../src/game/perks';
+import { startNextLevel } from '../src/game/levels';
 import { botInput } from '../src/game/bot';
 import { startingOffer, ownedSlots } from '../src/game/inventory';
 import { STEP } from '../src/engine/loop';
@@ -20,6 +21,7 @@ it('прогрессия пушек', { timeout: 600_000 }, () => {
     let got = 0;
     for (let i = 0; i < 14 * 60 / STEP && G.state !== 'dead'; i++) {
       if (G.state === 'perk') choosePerk(0);
+      if (G.state === 'transit') startNextLevel();
       G.mods.maxHp = Math.max(G.mods.maxHp, 1e6); G.p.hp = 1e6; // бессмертие: меряем прогрессию, а не выживание
       step(STEP, botInput({ abilities: true, dash: true }));
       for (const s of ownedSlots()) if (s.id !== 'makarov' && !seen.has(s.id)) { seen.add(s.id); got++; }

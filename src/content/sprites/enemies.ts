@@ -442,3 +442,18 @@ export function sShawa(g: Grid, f: number): void {
   // вонь
   for (let i = 0; i < 3; i++) g.px(2 + i * 5 + (f % 2), 1 - (i % 2) + (f % 2), P.greenL);
 }
+
+/** Бабушка-смотрительница музея: платок, очки, «ТИШЕ!». */
+export function sGuard(g: Grid, f: number): void {
+  const sw = [1, 0, -1, 0][f];
+  g.line(6, 17, 6 + sw, 20, P.ink, 1); g.line(10, 17, 10 - sw, 20, P.ink, 1);
+  g.ell(8, 13, 5, 5, P.purple); g.rect(4, 12, 9, 1, P.purpleD); g.rect(7, 9, 2, 8, P.purpleD);
+  g.ell(8, 6, 3.5, 3.5, P.skinL); g.ell(8, 4, 4.5, 3, P.red); g.px(4, 7, P.red); g.px(12, 7, P.red);
+  g.rect(5, 6, 3, 1, P.ink); g.rect(9, 6, 3, 1, P.ink); g.px(8, 8, P.skinD);
+  g.line(13, 11, 15, 8 - (f % 2), P.skinL); g.px(15, 7 - (f % 2), P.skin);
+}
+/** Пчела: злая на всех. */
+export function sBee(g: Grid, f: number): void {
+  g.ell(4, 4, 3, 2, P.gold); g.px(3, 3, P.ink); g.px(3, 4, P.ink); g.px(5, 3, P.ink); g.px(5, 5, P.ink); g.px(7, 4, P.ink);
+  g.px(3, 1 + f, P.white); g.px(5, 1 + f, P.white);
+}

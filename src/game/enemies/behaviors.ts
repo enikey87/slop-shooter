@@ -6,7 +6,7 @@ import { G, sfx } from '../world';
 import { say, burst, ring, later } from '../fx';
 import { bodyY } from '../body';
 import { hurt, explode, damageProp, dropBomb } from '../combat';
-import { spawnPortal, addEnemy } from '../spawn';
+import { spawnPortal, addEnemy, absurdity } from '../spawn';
 import { spawnPoint } from '../arena';
 import { stealGun } from '../bosses/floppa';
 import { WW, WH, type Enemy } from '../state';
@@ -22,7 +22,8 @@ function wiggle(s: Steer, t: number, amp: number): void {
   s.vx += -s.dy / s.d * Math.sin(t) * amp; s.vy += s.dx / s.d * Math.sin(t) * amp;
 }
 function chatter(e: Enemy, s: Steer, rate: number, lines: readonly string[], color: string, dy = 30): void {
-  if (random() < s.dt * rate) say(e.x, e.y - dy, pick(lines), color);
+  // чем абсурднее уровень, тем болтливее слоп
+  if (random() < s.dt * rate * (1 + (absurdity() - 1) * .25)) say(e.x, e.y - dy, pick(lines), color);
 }
 /** Рывок: замах (wind) → разгон по прямой (charge) → walk. Возвращает true, пока рывок идёт. */
 export function chargeStep(e: Enemy, s: Steer, speed: number, dur: number, onEnd: () => void): boolean {
@@ -383,3 +384,15 @@ export const shawa: Behavior = (e, s) => {
 export function gas(x: number, y: number, r: number, t: number): void {
   G.zones.push({ x, y, r, t, max: t, kind: 'gas' });
 }
+
+/** Бабушка-смотрительница: «ТИШЕ!» — рядом с ней стреляешь вдвое реже. */
+export const guard: Behavior = (e, s, auras) => {
+  if (s.d < 70) auras.guilt = true;
+  if (e.cd <= 0 && s.d < 90) { e.cd = 3; say(e.x, e.y - 26, pick(['ТИШЕ!', 'НЕ ТРОГАТЬ!', 'БАХИЛЫ НАДЕНЬ', 'ФОТОГРАФИРОВАТЬ НЕЛЬЗЯ']), P.purple, true); }
+};
+/** Пчела из улья: сначала жалит всех подряд (переманена), потом злится на героя и через 8 с улетает. */
+export const bee: Behavior = (e, s) => {
+  s.vx += Math.sin(e.t * 17) * 40; s.vy += Math.cos(e.t * 13) * 40;
+  e.life2 = (e.life2 ?? 8) - s.dt;
+  if (e.life2 <= 0) { e.dead = true; say(e.x, e.y - 8, 'улетела', P.gold); }
+};

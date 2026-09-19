@@ -47,3 +47,19 @@ describe('боссы', () => {
     }
   });
 });
+
+describe('оглушение боссов', () => {
+  it('спам капчей не держит босса оглушённым и неуязвимым вечно', () => {
+    start(12);
+    G.wave = 15; G.phase = 'wave'; G.mods.maxHp = G.p.hp = 1e9;
+    const b = spawnFromPortal({ x: 500, y: 300, type: 'cboss', elite: false });
+    tick(200);
+    b.trans = 1.4;
+    // оглушаем каждые 0,5 с 10 секунд подряд
+    for (let i = 0; i < 20; i++) { b.stun = .8; tick(30); }
+    expect(b.trans).toBeLessThanOrEqual(0);
+    let free = 0;
+    for (let i = 0; i < 20; i++) { b.stun = Math.max(b.stun, .8); tick(30); if (b.stun <= 0) free++; }
+    expect(free).toBeGreaterThan(0);
+  });
+});

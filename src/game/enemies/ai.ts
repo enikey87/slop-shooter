@@ -117,7 +117,20 @@ function updateOne(e: Enemy, dt: number, auras: Auras, mineLure: boolean): void 
   if (e.burnDur && e.burnDur > 0) burn(e, dt);
   if (e.dead) return;
   const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
-  if (e.stun > 0) { e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt); return; }
+  // боссы не держатся в вечном оглушении: после оглушения 3 с иммунитета, и смена фазы не замирает
+  if (isBoss(e)) {
+    if (e.stunGuard && e.stunGuard > 0) { e.stunGuard -= dt; e.stun = 0; }
+    if (e.trans && e.trans > 0 && e.stun > 0) e.trans -= dt;
+  }
+  if (e.stun > 0) {
+    e.stun -= dt; e.x += e.kx * dt; e.y += e.ky * dt; decayKnock(e, dt);
+    if (isBoss(e)) {
+      // непрерывно — не больше 2 с, потом 3 с иммунитета
+      e.stunFor = (e.stunFor ?? 0) + dt;
+      if (e.stun <= 0 || e.stunFor > 2) { e.stun = 0; e.stunFor = 0; e.stunGuard = 3; }
+    }
+    return;
+  }
   if (e.charm > 0) { charmed(e, dt); return; }
   if (isBoss(e) && !e.decoy && !bossTick(e, dt)) return;
   // PRO-подписка лечится; голем и сигма на половине здоровья переходят во вторую фазу

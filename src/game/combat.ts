@@ -15,6 +15,8 @@ import { gunKill, gunLevel, offerWeapons, evolvable } from './inventory';
 import { comboKill, hitStop } from './juice';
 import { progress } from './guard';
 import { streamerBoom, gas } from './enemies/behaviors';
+import { makeProp } from './arena';
+import { bossDefeated } from './levels';
 
 export interface HitOpts {
   /** без критов и «несерьёзного» урона (взрывы, ауры, способности) */
@@ -113,6 +115,64 @@ export function destroyProp(pr: Prop): void {
       G.pickups.push(mkPickup(cx - 8, cy + 12, random() < .3 ? 'dubai' : 'coffee'), mkPickup(cx + 8, cy + 12, 'coffee'), mkPickup(cx, cy + 20, 'ammo'));
       say(cx, cy - 20, 'КОФЕ!', P.gold); sfx('boom');
       break;
+    // ---------- пропсы уровней ----------
+    case 'desk':
+      hooks.rubble(pr, [P.woodL, P.wood, P.cyanD, P.ink]); burst(cx, cy, [P.woodL, P.cyan], 20, 60);
+      if (random() < .4) G.pickups.push(mkPickup(cx, cy + 10, 'ammo'));
+      say(cx, cy - 20, pick(['KPI НЕ ВЫПОЛНЕН', 'ноутбук был не мой', 'отправил в Jira']), P.cyan);
+      break;
+    case 'keg':
+      // комбуча разливается: скользко
+      hooks.rubble(pr, [P.green, P.greenL, P.metalL]); burst(cx, cy, [P.greenL, P.white], 24, 70);
+      for (let i = 0; i < 3; i++) G.peels.push({ x: cx + rnd(22), y: cy + 6 + rnd(12), t: 9 });
+      say(cx, cy - 20, 'КОМБУЧА РАЗЛИТА', P.greenL); sfx('bottle');
+      break;
+    case 'bed': {
+      // урожай: морковка лечит, грядка вырастает снова
+      hooks.rubble(pr, ['#6b4a2a', P.green]);
+      G.pickups.push(mkPickup(cx, cy + 8, 'carrot'));
+      const { x, y } = pr;
+      later(20, () => { if (!G.props.some(q => Math.abs(q.x - x) < 4 && Math.abs(q.y - y) < 4)) G.props.push(makeProp('bed', x, y)); });
+      break;
+    }
+    case 'hive':
+      // пчёлы злые на всех: сначала бьют ближайших, потом улетают
+      hooks.rubble(pr, [P.gold, P.goldD, P.woodL]);
+      for (let i = 0; i < 6; i++) { const b = addEnemy('bee', cx + rnd(10), cy + rnd(6)); b.charm = 6; b.life2 = 8; }
+      say(cx, cy - 20, 'ЖЖЖЖЖЖ', P.gold, true); sfx('zap');
+      break;
+    case 'outhouse':
+      hooks.rubble(pr, [P.woodL, P.wood, P.brown]); gas(cx, cy + 6, 34, 6);
+      say(cx, cy - 20, 'ЗРЯ ТЫ ЭТО', P.greenL, true); sfx('boom');
+      break;
+    case 'banya':
+      hooks.rubble(pr, [P.wood, P.woodD, P.white]); burst(cx, cy, [P.white, P.greyL], 40, 80, 2);
+      say(cx, cy - 20, 'ПАР ВЫШЕЛ', P.white, true); sfx('boom');
+      break;
+    case 'pipe':
+      hooks.rubble(pr, [P.metal, P.greyD, P.cyan]); G.puddles.push({ x: cx, y: cy + 6, r: 16, t: 8, col: 'sewage' });
+      break;
+    case 'painting':
+      hooks.rubble(pr, [P.goldD, P.gold, '#4a5a3a']);
+      say(cx, cy - 20, pick(['шедевр утрачен', 'оценивался в 3 лайка', 'это был NFT']), P.gold);
+      break;
+    case 'statue':
+      // у статуи были лишние пальцы — и они разбегаются
+      hooks.rubble(pr, [P.greyL, P.white, P.grey]); burst(cx, cy, [P.white, P.greyL], 30, 70, 2);
+      for (let i = 0; i < 3; i++) addEnemy('hand', cx + rnd(12), cy + 8 + rnd(6));
+      say(cx, cy - 20, 'ПАЛЬЦЫ РАЗБЕЖАЛИСЬ', P.skin, true); sfx('boom');
+      break;
+    case 'gbottle':
+      hooks.rubble(pr, [P.bottle, P.white, P.gold]); G.zones.push({ x: cx, y: cy + 6, r: 30, t: 7, max: 7, kind: 'foam' });
+      say(cx, cy - 20, 'ПЕННОЕ РАЗЛИТО', P.gold, true); sfx('bottle');
+      break;
+    case 'tv':
+      hooks.rubble(pr, [P.ink, P.cyanD, P.pink, P.metal]); burst(cx, cy, [P.cyan, P.pink, P.white], 50, 90, 2);
+      say(cx, cy - 20, 'РЕКЛАМЫ БОЛЬШЕ НЕ БУДЕТ', P.cyan, true); sfx('boom');
+      break;
+    default:
+      hooks.rubble(pr, [P.greyD, P.metal, P.purple]); burst(cx, cy, [P.purple, P.cyan, P.pink], 24, 70);
+      sfx('prop');
   }
 }
 
@@ -166,8 +226,9 @@ export function killEnemy(e: Enemy, peaceful = false, src?: WeaponId): void {
     // сундук эволюции, если есть пушка 5-го уровня с нужным перком
     const evo = evolvable()[0];
     if (evo) G.pickups.push({ ...mkPickup(e.x, e.y - 26, 'evo'), gun: evo, t: 9999 });
-    banner('БОСС ПОВЕРЖЕН', pick(['I’m sorry, I can’t continue', 'модель снята с продакшена', 'ошибка 500: босс не найден']), 2.4, P.gold);
     G.shake = 10;
+    // уровень пройден: остатки волны удаляются, через передышку — портал
+    bossDefeated();
     return;
   }
   if (e.type === 'grandpa' && peaceful) { G.pickups.push(mkPickup(e.x, e.y, 'hp')); return; }
@@ -188,6 +249,7 @@ export function hurt(n: number, srcTxt?: string | null): void {
   const p = G.p;
   if (p.inv > 0 || p.dashT > 0 || G.state !== 'play') return;
   // полсекунды неуязвимости: толпа рук не «съедает» за один миг
+  if (G.mod === 'glass') n *= 2;
   p.hp -= n; p.inv = .5; p.hit = .1;
   if (n >= 15) hitStop(.06); G.shake = Math.max(G.shake, 3.5); G.flash = .25;
   say(p.x, p.y - 22, srcTxt || `-${Math.round(n)}% реальности`, P.pink);

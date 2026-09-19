@@ -24,6 +24,7 @@ function move(dt: number, input: TickInput): void {
   const p = G.p, m = G.mods;
   let mx = input.mx, my = input.my;
   if (p.invert > 0) { p.invert -= dt; mx = -mx; my = -my; }
+  if (G.mod === 'mirror') mx = -mx;
   const ml = Math.hypot(mx, my);
   if (ml > 1) { mx /= ml; my /= ml; }
   p.moving = ml > 0;

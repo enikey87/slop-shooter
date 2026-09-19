@@ -1,6 +1,7 @@
 // Текущий забег и связь симуляции с внешним миром (звук, декали, экраны) через хуки.
 // В тестах и симуляторе хуки остаются пустыми — игра крутится без DOM и WebAudio.
 import type { Enemy, GameState, Player, Prop } from './state';
+import type { LevelId } from '../content/levels';
 import { createState } from './state';
 
 export let G: GameState = createState(1);
@@ -20,13 +21,17 @@ export interface Hooks {
   perksOpened(): void;
   gameOver(): void;
   victory(): void;
+  /** вошёл в портал: показать экран загрузки, потом вызвать startNextLevel() */
+  transit(): void;
+  /** начался уровень: перерисовать пол, сменить музыку */
+  levelStart(id: LevelId): void;
   /** ошибка внутри симуляции, которую поймали и пережили */
   error(err: unknown, where: string): void;
 }
 const noop = (): void => {};
 export const hooks: Hooks = {
   sfx: noop, bossMusic: noop, regularMusic: noop, splat: noop, rubble: noop,
-  enemyDied: noop, heroDied: noop, perksOpened: noop, gameOver: noop, victory: noop, error: noop
+  enemyDied: noop, heroDied: noop, perksOpened: noop, gameOver: noop, victory: noop, error: noop, transit: noop, levelStart: noop
 };
 export function setHooks(h: Partial<Hooks>): void { Object.assign(hooks, h); }
 export const sfx = (name: string, gap?: number): void => hooks.sfx(name, gap);
