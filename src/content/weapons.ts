@@ -58,8 +58,10 @@ export type WeaponId = keyof typeof WEAPONS;
 export const weaponDef = (id: WeaponId): WeaponDef => WEAPONS[id];
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
 
-/** Опыт (убийства пушкой) до уровней 2–5. */
-export const LEVEL_KILLS = [0, 10, 30, 60, 100] as const;
+/** Опыт пушки до уровней 2–5. Опыт = «вес» убитого врага (рука 1, голем 6, босс 40). */
+export const LEVEL_KILLS = [0, 25, 80, 180, 320] as const;
+/** Потолок опыта за одно убийство: босс сразу не докачивает пушку до конца. */
+export const MAX_KILL_XP = 40;
 export const MAX_GUN_LEVEL = 5;
 /** Множители от уровня пушки: чётные уровни — цифры, нечётные — механики. */
 export const levelDmg = (l: number): number => (l >= 4 ? 1.44 : l >= 2 ? 1.2 : 1);
