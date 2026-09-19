@@ -20,7 +20,8 @@ export function ring(x: number, y: number, color: string, size: number, life: nu
 }
 
 export function tickTimers(dt: number): void {
-  for (const tm of G.timers) { tm.t -= dt; if (tm.t <= 0) tm.fn(); }
+  // ошибка в одном отложенном событии не должна ронять весь тик
+  for (const tm of G.timers) { tm.t -= dt; if (tm.t <= 0) { try { tm.fn(); } catch (err) { console.error('timer', err); } } }
   G.timers = G.timers.filter(tm => tm.t > 0);
 }
 

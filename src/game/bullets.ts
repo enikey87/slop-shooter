@@ -35,7 +35,7 @@ function grenade(b: Bullet, dt: number): void {
     // оглушённые получают +30% урона; ур. 3 — ещё 2 с не атакуют
     e.vulnT = e.stun;
     // эволюция reCAPTCHA v∞: оглушённые переходят на твою сторону
-    if (isEvolved('captcha') && !isBoss(e)) { e.charm = Math.max(e.charm, e.stun + 4); e.disguised = false; }
+    if (isEvolved('captcha') && !isBoss(e) && !(e.charmImmune && e.charmImmune > 0)) { e.charm = Math.max(e.charm, e.stun + 4); e.charmImmune = e.stun + 10; e.disguised = false; }
     if (L >= 3) { e.cd = Math.max(e.cd, e.stun + 2); e.hitCd = Math.max(e.hitCd, e.stun + 2); }
   }
   // ур. 5: «выберите все светофоры» стирает вражеские снаряды

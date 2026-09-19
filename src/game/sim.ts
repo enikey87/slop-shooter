@@ -2,7 +2,7 @@
 import { P } from '../content/palette';
 import { PROPDEF } from '../content/props';
 import { reseed, random, rnd } from '../engine/rng';
-import { G, setGame } from './world';
+import { G, setGame, reportSimError } from './world';
 import { createState, type GameState } from './state';
 import { layoutProps, pushOut } from './arena';
 import { tickTimers, tickFx } from './fx';
@@ -19,6 +19,7 @@ import { altFire } from './weapons';
 import { cycleGun, selectGun, takeNear, rerollNear } from './inventory';
 import type { Action, TickInput } from './input';
 import { tickCombo } from './juice';
+import { sanitize, watchWave } from './guard';
 
 export function newGame(seed: number): GameState {
   reseed(seed);
@@ -47,6 +48,10 @@ function act(a: Action): void {
   }
 }
 
+function guard(where: string, fn: () => void): void {
+  try { fn(); } catch (err) { reportSimError(err, where); }
+}
+
 function update(dt: number, input: TickInput): void {
   // стоп-кадр: мир стоит, нажатия всё равно проходят
   if (G.hitStop > 0) { G.hitStop -= dt; for (const a of input.actions) act(a); return; }
@@ -55,13 +60,14 @@ function update(dt: number, input: TickInput): void {
   if (G.intro) { G.intro.t -= dt; tickFx(dt); if (G.intro.t <= 0) G.intro = null; return; }
   tickTimers(dt);
   for (const a of input.actions) if (G.state === 'play') act(a);
-  updatePlayer(dt, input);
-  updateWaves(dt);
-  updateEnemies(dt);
-  updateHazards(dt);
-  updateAllies(dt);
-  updateBullets(dt);
-  updatePickups(dt);
+  // каждая система отдельно: сбой в одной не останавливает остальные
+  guard('игрок', () => updatePlayer(dt, input));
+  guard('волны', () => { updateWaves(dt); watchWave(dt); });
+  guard('враги', () => updateEnemies(dt));
+  guard('зоны', () => updateHazards(dt));
+  guard('союзники', () => updateAllies(dt));
+  guard('снаряды', () => updateBullets(dt));
+  guard('лут', () => updatePickups(dt));
   for (const pr of G.props) {
     pr.flash -= dt;
     // повреждённые укрытия дымят, почти разбитые — искрят
@@ -74,6 +80,7 @@ function update(dt: number, input: TickInput): void {
   tickCombo(dt);
   if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
   if (G.pendingPerks > 0 && G.state === 'play') openPerks();
+  sanitize();
 }
 
 /** Главное меню: враги бродят на фоне. */

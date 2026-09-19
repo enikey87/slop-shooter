@@ -20,11 +20,20 @@ export interface Hooks {
   perksOpened(): void;
   gameOver(): void;
   victory(): void;
+  /** ошибка внутри симуляции, которую поймали и пережили */
+  error(err: unknown, where: string): void;
 }
 const noop = (): void => {};
 export const hooks: Hooks = {
   sfx: noop, bossMusic: noop, regularMusic: noop, splat: noop, rubble: noop,
-  enemyDied: noop, heroDied: noop, perksOpened: noop, gameOver: noop, victory: noop
+  enemyDied: noop, heroDied: noop, perksOpened: noop, gameOver: noop, victory: noop, error: noop
 };
 export function setHooks(h: Partial<Hooks>): void { Object.assign(hooks, h); }
 export const sfx = (name: string, gap?: number): void => hooks.sfx(name, gap);
+/** Пойманные ошибки симуляции (для тестов и отладки). */
+export const simErrors: string[] = [];
+export function reportSimError(err: unknown, where: string): void {
+  const msg = `${where}: ${err instanceof Error ? err.message : String(err)}`;
+  if (simErrors.length < 50 && !simErrors.includes(msg)) simErrors.push(msg);
+  hooks.error(err, where);
+}

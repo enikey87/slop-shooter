@@ -11,7 +11,8 @@
     "test": "vitest run tests/",
     "balance": "vitest run tools/balance --disableConsoleIntercept",
     "weapons": "vitest run tools/weapons --disableConsoleIntercept",
-    "progression": "vitest run tools/progression --disableConsoleIntercept"
+    "progression": "vitest run tools/progression --disableConsoleIntercept",
+    "soak": "vitest run tools/soak --disableConsoleIntercept"
   },
   "devDependencies": {
     "typescript": "7.0.2",

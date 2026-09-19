@@ -92,8 +92,10 @@ export function spawnToilets(n: number): void {
 }
 
 /** Портал догенерировался — враг появляется. */
+/** Появление врага — тоже прогресс волны. */
 export function spawnFromPortal(po: { x: number; y: number; type: EnemyId; elite: boolean; mama?: boolean; charm?: boolean }): Enemy {
   const ne = addEnemy(po.type, po.x, po.y, po.elite);
+  G.stuckT = 0;
   if (po.type === 'amogus' && po.mama) ne.disguised = false;
   burst(po.x, po.y - 4, [P.pink, P.cyan], 12, 50);
   if (po.charm) ne.charm = 10;

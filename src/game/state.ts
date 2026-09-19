@@ -87,6 +87,8 @@ export interface Enemy {
   elite: boolean; aff: AffixId | null; affT: number; shield: number;
   stun: number; stunKind?: StunKind;
   slowT: number; calm: number; charm: number; charmBoom?: boolean;
+  /** сколько ещё нельзя переманить капчей (чтобы не держать врага «своим» вечно) */
+  charmImmune?: number;
   /** прозрачность (троллфейс) */
   vis: number;
   state: EnemyState; st: number;
@@ -242,6 +244,8 @@ export interface GameState {
   spawnT: number;
   score: number; kills: number; xp: number;
   shake: number; flash: number; blackout: number;
+  /** сторож волны: сколько секунд нет прогресса (game/guard.ts) */
+  stuckT: number;
   /** стоп-кадр: мир замирает на долю секунды от тяжёлых попаданий */
   hitStop: number;
   /** серия убийств: сколько, сколько секунд ещё держится, лучшая за забег */
@@ -286,7 +290,7 @@ export function createPlayer(): Player {
 export function createState(seed: number): GameState {
   return {
     seed, state: 'play', t: 0, wave: 0, phase: 'inter', interT: 1.2, queue: [], spawnT: 0,
-    score: 0, kills: 0, xp: 0, shake: 0, flash: 0, blackout: 0, hitStop: 0, combo: { n: 0, t: 0, best: 0 },
+    score: 0, kills: 0, xp: 0, shake: 0, flash: 0, blackout: 0, stuckT: 0, hitStop: 0, combo: { n: 0, t: 0, best: 0 },
     pendingPerks: 0, perkChoices: [], taken: {},
     gunLvl: Object.fromEntries(WEAPON_IDS.map(id => [id, { lvl: 1, xp: 0 }])) as GameState['gunLvl'], offerN: 0, evolved: {},
     mods: baseMods(), ab: { q: 1, e: 1, r: 1, c: 1, v: 1, g: 1 },
